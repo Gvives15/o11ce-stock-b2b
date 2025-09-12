@@ -16,7 +16,26 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from ninja import NinjaAPI
+
+from apps.core.api import router as core_router
+from apps.catalog.api import router as catalog_router
+from apps.customers.api import router as customers_router
+from apps.orders.api import router as orders_router
+from apps.stock.api import router as stock_router
+from apps.notifications.api import router as notifications_router
+
+api = NinjaAPI(title="O11CE Stock B2B API")
+
+# Registrar los routers de cada aplicación
+api.add_router("/core/", core_router)
+api.add_router("/catalog/", catalog_router)
+api.add_router("/customers/", customers_router)
+api.add_router("/orders/", orders_router)
+api.add_router("/stock/", stock_router)
+api.add_router("/notifications/", notifications_router)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/v1/', api.urls),
 ]
