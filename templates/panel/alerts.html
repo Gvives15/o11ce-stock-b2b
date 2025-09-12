@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Alerts</title>
+</head>
+<body>
+  <h1>Alerts</h1>
+  <input type="text" id="filter" placeholder="Filter alerts" />
+  <ul id="alert-list">
+    <!-- TODO: Populate alerts -->
+  </ul>
+  <script>
+    const filterInput = document.getElementById('filter');
+
+    function loadAlerts(query='') {
+      // TODO: Replace '/api/panel/alerts/' with real endpoint
+      fetch(`/api/panel/alerts/?q=${encodeURIComponent(query)}`)
+        .then(res => res.json())
+        .then(data => {
+          // TODO: Render alerts
+          console.log('Alerts', data);
+        });
+    }
+
+    filterInput.addEventListener('input', (e) => {
+      loadAlerts(e.target.value);
+    });
+
+    loadAlerts();
+  </script>
+</body>
+</html>

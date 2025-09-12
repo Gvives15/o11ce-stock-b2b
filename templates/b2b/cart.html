@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Cart</title>
+</head>
+<body>
+  <h1>Shopping Cart</h1>
+  <ul id="cart-items">
+    <!-- TODO: List cart items -->
+  </ul>
+  <p>Subtotal: <span id="subtotal">0.00</span></p>
+  <script>
+    // TODO: Replace '/api/b2b/cart/' with real endpoint
+    fetch('/api/b2b/cart/')
+      .then(res => res.json())
+      .then(data => {
+        // TODO: Render cart items and calculate subtotal
+        console.log('Cart', data);
+      });
+  </script>
+</body>
+</html>
