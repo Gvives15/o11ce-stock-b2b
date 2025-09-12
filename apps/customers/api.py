@@ -1,3 +1,4 @@
+
 """API endpoints for customer related operations."""
 
 from ninja import Router

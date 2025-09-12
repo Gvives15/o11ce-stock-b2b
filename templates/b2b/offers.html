@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Offers</title>
+</head>
+<body>
+  <h1>Offers</h1>
+  <div id="offers">
+    <!-- TODO: Render offers catalog -->
+  </div>
+  <script>
+    // TODO: Replace '/api/b2b/offers/' with actual endpoint
+    fetch('/api/b2b/offers/')
+      .then(res => res.json())
+      .then(data => {
+        // TODO: Render offers with final prices
+        console.log('Offers', data);
+      });
+  </script>
+</body>
+</html>

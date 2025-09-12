@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Stock List</title>
+</head>
+<body>
+  <h1>Product Stock</h1>
+  <table id="stock-table">
+    <thead>
+      <tr><th>Product</th><th>Stock</th></tr>
+    </thead>
+    <tbody>
+      <!-- TODO: Populate table rows with product data -->
+    </tbody>
+  </table>
+  <script>
+    // TODO: Replace '/api/panel/stock/' with real endpoint
+    fetch('/api/panel/stock/')
+      .then(response => response.json())
+      .then(data => {
+        // TODO: Render stock data into table
+        console.log('Stock data', data);
+      });
+  </script>
+</body>
+</html>
