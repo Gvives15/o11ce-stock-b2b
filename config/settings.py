@@ -176,3 +176,18 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '0'))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get('SECURE_HSTS_INCLUDE_SUBDOMAINS', '0') == '1'
     SECURE_HSTS_PRELOAD = os.environ.get('SECURE_HSTS_PRELOAD', '0') == '1'
+
+# APPLICATION SETTINGS
+# ------------------------------------------------------------------------------
+
+JWT_SECRET = os.getenv("JWT_SECRET", "devjwt")
+
+SMTP_HOST = os.getenv("SMTP_HOST", "localhost")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+
+LOW_STOCK_THRESHOLD_DEFAULT = int(
+    os.getenv("LOW_STOCK_THRESHOLD_DEFAULT", "10")
+)
+NEAR_EXPIRY_DAYS = int(os.getenv("NEAR_EXPIRY_DAYS", "7"))
+
+WHATSAPP_PROVIDER_URL = os.getenv("WHATSAPP_PROVIDER_URL", "http://localhost")
