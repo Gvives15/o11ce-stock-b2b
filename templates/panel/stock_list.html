@@ -1,26 +1,216 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Stock List</title>
-</head>
-<body>
-  <h1>Product Stock</h1>
-  <table id="stock-table">
-    <thead>
-      <tr><th>Product</th><th>Stock</th></tr>
-    </thead>
-    <tbody>
-      <!-- TODO: Populate table rows with product data -->
-    </tbody>
-  </table>
-  <script>
-    // TODO: Replace '/api/panel/stock/' with real endpoint
-    fetch('/api/panel/stock/')
-      .then(response => response.json())
-      .then(data => {
-        // TODO: Render stock data into table
-        console.log('Stock data', data);
-      });
-  </script>
-</body>
-</html>
+{% extends 'panel/base.html' %}
+
+{% block title %}Stock — Panel O11CE{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Gestión de Stock</h1>
+    <p class="page-subtitle">Lista de productos y cantidades disponibles</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">📦 Productos en inventario</h2>
+    </div>
+    <div class="card-body">
+        {% if rows %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>SKU</th>
+                        <th>Categoría</th>
+                        <th>Cantidad disponible</th>
+                        <th>Unidad</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td>
+                            <strong>{{ row.product.name }}</strong>
+                            {% if row.product.description %}
+                                <br><small class="text-muted">{{ row.product.description|truncatechars:50 }}</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ row.product.sku|default:"-" }}</td>
+                        <td>{{ row.product.category|default:"-" }}</td>
+                        <td>
+                            <span class="stock-quantity {% if row.on_hand == 0 %}text-danger{% elif row.on_hand < 10 %}text-warning{% endif %}">
+                                {{ row.on_hand }}
+                            </span>
+                        </td>
+                        <td>{{ row.product.unit|default:"unidades" }}</td>
+                        <td>
+                            {% if row.on_hand == 0 %}
+                                <span class="badge badge-danger">Sin stock</span>
+                            {% elif row.on_hand < 10 %}
+                                <span class="badge badge-warning">Stock bajo</span>
+                            {% else %}
+                                <span class="badge badge-success">Disponible</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                <a href="/panel/stock/{{ row.product.id }}/" class="btn btn-sm btn-primary">Ver detalles</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="stock-summary">
+            <div class="summary-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Total de productos:</span>
+                    <span class="stat-value">{{ rows|length }}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Sin stock:</span>
+                    <span class="stat-value text-danger">
+                        {% for row in rows %}{% if row.on_hand == 0 %}{{ forloop.counter0|add:1 }}{% endif %}{% empty %}0{% endfor %}
+                    </span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Stock bajo:</span>
+                    <span class="stat-value text-warning">
+                        {% for row in rows %}{% if row.on_hand > 0 and row.on_hand < 10 %}{{ forloop.counter0|add:1 }}{% endif %}{% empty %}0{% endfor %}
+                    </span>
+                </div>
+            </div>
+        </div>
+        
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">📦</div>
+            <h3>No hay productos registrados</h3>
+            <p>Aún no se han registrado productos en el sistema.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .table-responsive {
+        overflow-x: auto;
+    }
+    
+    .stock-quantity {
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+    
+    .text-warning {
+        color: #ffc107;
+    }
+    
+    .text-danger {
+        color: #dc3545;
+    }
+    
+    .text-muted {
+        color: #6c757d;
+    }
+    
+    .badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        border-radius: 0.375rem;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+    
+    .badge-success {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .badge-warning {
+        background-color: #ffc107;
+        color: #212529;
+    }
+    
+    .badge-danger {
+        background-color: #dc3545;
+        color: white;
+    }
+    
+    .btn-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.8rem;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .stock-summary {
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid #e9ecef;
+    }
+    
+    .summary-stats {
+        display: flex;
+        gap: 2rem;
+        flex-wrap: wrap;
+    }
+    
+    .stat-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        font-weight: 500;
+    }
+    
+    .stat-value {
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+    }
+    
+    .empty-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+    }
+    
+    .empty-state h3 {
+        color: #495057;
+        margin-bottom: 0.5rem;
+    }
+    
+    .empty-state p {
+        color: #6c757d;
+    }
+    
+    @media (max-width: 768px) {
+        .summary-stats {
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+        }
+    }
+</style>
+{% endblock %}

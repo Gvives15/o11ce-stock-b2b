@@ -1,0 +1,148 @@
+{% extends 'panel/base.html' %}
+{% load static %}
+
+{% block title %}Detalles de Usuario - {{ user_obj.username }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Detalles del Usuario: {{ user_obj.username }}</h3>
+                    <div class="card-tools">
+                        <a href="{% url 'panel:user_edit' user_obj.id %}" class="btn btn-primary btn-sm">
+                            <i class="fas fa-edit"></i> Editar
+                        </a>
+                        <a href="{% url 'panel:users_list' %}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-arrow-left"></i> Volver
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>Información Personal</h5>
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>Nombre de usuario:</strong></td>
+                                    <td>{{ user_obj.username }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Email:</strong></td>
+                                    <td>{{ user_obj.email }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Nombre:</strong></td>
+                                    <td>{{ user_obj.first_name|default:"No especificado" }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Apellido:</strong></td>
+                                    <td>{{ user_obj.last_name|default:"No especificado" }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Estado:</strong></td>
+                                    <td>
+                                        {% if user_obj.is_active %}
+                                            <span class="badge badge-success">Activo</span>
+                                        {% else %}
+                                            <span class="badge badge-danger">Inactivo</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Fecha de registro:</strong></td>
+                                    <td>{{ user_obj.date_joined|date:"d/m/Y H:i" }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Último acceso:</strong></td>
+                                    <td>{{ user_obj.last_login|date:"d/m/Y H:i"|default:"Nunca" }}</td>
+                                </tr>
+                            </table>
+                            
+                            <h5 class="mt-4">Grupos</h5>
+                            {% if user_obj.groups.all %}
+                                <ul class="list-group list-group-flush">
+                                    {% for group in user_obj.groups.all %}
+                                        <li class="list-group-item px-0">{{ group.name }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="text-muted">No pertenece a ningún grupo</p>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h5>Permisos de Acceso (Scopes)</h5>
+                            <div class="list-group list-group-flush">
+                                <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                                    Dashboard
+                                    {% if user_scope.has_scope_dashboard %}
+                                        <span class="badge badge-success">Permitido</span>
+                                    {% else %}
+                                        <span class="badge badge-danger">Denegado</span>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                                    Inventario
+                                    {% if user_scope.has_scope_inventory %}
+                                        <span class="badge badge-success">Permitido</span>
+                                    {% else %}
+                                        <span class="badge badge-danger">Denegado</span>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                                    Órdenes
+                                    {% if user_scope.has_scope_orders %}
+                                        <span class="badge badge-success">Permitido</span>
+                                    {% else %}
+                                        <span class="badge badge-danger">Denegado</span>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                                    Clientes
+                                    {% if user_scope.has_scope_customers %}
+                                        <span class="badge badge-success">Permitido</span>
+                                    {% else %}
+                                        <span class="badge badge-danger">Denegado</span>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                                    Reportes
+                                    {% if user_scope.has_scope_reports %}
+                                        <span class="badge badge-success">Permitido</span>
+                                    {% else %}
+                                        <span class="badge badge-danger">Denegado</span>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                                    Analytics
+                                    {% if user_scope.has_scope_analytics %}
+                                        <span class="badge badge-success">Permitido</span>
+                                    {% else %}
+                                        <span class="badge badge-danger">Denegado</span>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                                    Gestión de Usuarios
+                                    {% if user_scope.has_scope_users %}
+                                        <span class="badge badge-success">Permitido</span>
+                                    {% else %}
+                                        <span class="badge badge-danger">Denegado</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

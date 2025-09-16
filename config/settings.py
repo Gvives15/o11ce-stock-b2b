@@ -60,7 +60,9 @@ LOCAL_APPS = [
     'apps.customers',
     'apps.orders',
     'apps.stock',
+    'apps.pos',
     'apps.notifications',
+    'apps.panel.apps.PanelConfig',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -102,6 +104,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'apps.panel.context_processors.navigation_context',
             ],
         },
     },
@@ -156,6 +159,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # API CONFIGURATION
 # ------------------------------------------------------------------------------
 API_VERSION = os.environ.get('API_VERSION', 'v1')
+
+# AUTHENTICATION SETTINGS
+# ------------------------------------------------------------------------------
+LOGIN_URL = '/panel/login/'
+LOGIN_REDIRECT_URL = '/panel/'
+LOGOUT_REDIRECT_URL = '/panel/login/'
 
 # SECURITY SETTINGS
 # ------------------------------------------------------------------------------

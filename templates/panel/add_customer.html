@@ -1,0 +1,383 @@
+{% extends "panel/base.html" %}
+{% load static %}
+
+{% block title %}Agregar Cliente{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">Agregar Nuevo Cliente</h1>
+                <a href="{% url 'panel:customers_list' %}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-arrow-left"></i> Volver a Clientes
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Información del Cliente</h5>
+                </div>
+                <div class="card-body">
+                    {% include "panel/_flash.html" %}
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <!-- Información Personal -->
+                        <h6 class="text-muted mb-3">Información Personal</h6>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="name" class="form-label">Nombre Completo *</label>
+                                    <input type="text" class="form-control" id="name" name="name" required 
+                                           value="{{ form.name.value|default:'' }}" maxlength="200">
+                                    {% if form.name.errors %}
+                                        <div class="text-danger small">{{ form.name.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="email" class="form-label">Email *</label>
+                                    <input type="email" class="form-control" id="email" name="email" required 
+                                           value="{{ form.email.value|default:'' }}">
+                                    {% if form.email.errors %}
+                                        <div class="text-danger small">{{ form.email.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="phone" class="form-label">Teléfono</label>
+                                    <input type="tel" class="form-control" id="phone" name="phone" 
+                                           value="{{ form.phone.value|default:'' }}" maxlength="20">
+                                    <div class="form-text">Formato: +1234567890 o 1234567890</div>
+                                    {% if form.phone.errors %}
+                                        <div class="text-danger small">{{ form.phone.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="document" class="form-label">Documento de Identidad</label>
+                                    <input type="text" class="form-control" id="document" name="document" 
+                                           value="{{ form.document.value|default:'' }}" maxlength="50">
+                                    <div class="form-text">DNI, Cédula, Pasaporte, etc.</div>
+                                    {% if form.document.errors %}
+                                        <div class="text-danger small">{{ form.document.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="customer_type" class="form-label">Tipo de Cliente *</label>
+                                    <select class="form-select" id="customer_type" name="customer_type" required>
+                                        <option value="">Seleccionar tipo</option>
+                                        <option value="retail" {% if form.customer_type.value == 'retail' %}selected{% endif %}>Minorista</option>
+                                        <option value="wholesale" {% if form.customer_type.value == 'wholesale' %}selected{% endif %}>Mayorista</option>
+                                        <option value="distributor" {% if form.customer_type.value == 'distributor' %}selected{% endif %}>Distribuidor</option>
+                                    </select>
+                                    {% if form.customer_type.errors %}
+                                        <div class="text-danger small">{{ form.customer_type.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="company" class="form-label">Empresa</label>
+                                    <input type="text" class="form-control" id="company" name="company" 
+                                           value="{{ form.company.value|default:'' }}" maxlength="200">
+                                    <div class="form-text">Opcional para clientes empresariales</div>
+                                    {% if form.company.errors %}
+                                        <div class="text-danger small">{{ form.company.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+                        
+                        <!-- Dirección -->
+                        <h6 class="text-muted mb-3">Dirección</h6>
+                        
+                        <div class="mb-3">
+                            <label for="street" class="form-label">Dirección</label>
+                            <input type="text" class="form-control" id="street" name="street" 
+                                   value="{{ form.street.value|default:'' }}" maxlength="300">
+                            <div class="form-text">Calle, número, apartamento, etc.</div>
+                            {% if form.street.errors %}
+                                <div class="text-danger small">{{ form.street.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="city" class="form-label">Ciudad</label>
+                                    <input type="text" class="form-control" id="city" name="city" 
+                                           value="{{ form.city.value|default:'' }}" maxlength="100">
+                                    {% if form.city.errors %}
+                                        <div class="text-danger small">{{ form.city.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="state" class="form-label">Estado/Provincia</label>
+                                    <input type="text" class="form-control" id="state" name="state" 
+                                           value="{{ form.state.value|default:'' }}" maxlength="100">
+                                    {% if form.state.errors %}
+                                        <div class="text-danger small">{{ form.state.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="postal_code" class="form-label">Código Postal</label>
+                                    <input type="text" class="form-control" id="postal_code" name="postal_code" 
+                                           value="{{ form.postal_code.value|default:'' }}" maxlength="20">
+                                    {% if form.postal_code.errors %}
+                                        <div class="text-danger small">{{ form.postal_code.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="country" class="form-label">País</label>
+                                    <select class="form-select" id="country" name="country">
+                                        <option value="">Seleccionar país</option>
+                                        <option value="AR" {% if form.country.value == 'AR' %}selected{% endif %}>Argentina</option>
+                                        <option value="BR" {% if form.country.value == 'BR' %}selected{% endif %}>Brasil</option>
+                                        <option value="CL" {% if form.country.value == 'CL' %}selected{% endif %}>Chile</option>
+                                        <option value="CO" {% if form.country.value == 'CO' %}selected{% endif %}>Colombia</option>
+                                        <option value="MX" {% if form.country.value == 'MX' %}selected{% endif %}>México</option>
+                                        <option value="PE" {% if form.country.value == 'PE' %}selected{% endif %}>Perú</option>
+                                        <option value="UY" {% if form.country.value == 'UY' %}selected{% endif %}>Uruguay</option>
+                                        <option value="VE" {% if form.country.value == 'VE' %}selected{% endif %}>Venezuela</option>
+                                        <option value="US" {% if form.country.value == 'US' %}selected{% endif %}>Estados Unidos</option>
+                                        <option value="ES" {% if form.country.value == 'ES' %}selected{% endif %}>España</option>
+                                        <option value="OTHER" {% if form.country.value == 'OTHER' %}selected{% endif %}>Otro</option>
+                                    </select>
+                                    {% if form.country.errors %}
+                                        <div class="text-danger small">{{ form.country.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+                        
+                        <!-- Configuración -->
+                        <h6 class="text-muted mb-3">Configuración</h6>
+                        
+                        <div class="mb-3">
+                            <label for="credit_limit" class="form-label">Límite de Crédito</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="credit_limit" name="credit_limit" 
+                                       step="0.01" min="0" value="{{ form.credit_limit.value|default:'0' }}">
+                            </div>
+                            <div class="form-text">Límite de crédito para compras a cuenta</div>
+                            {% if form.credit_limit.errors %}
+                                <div class="text-danger small">{{ form.credit_limit.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="discount_percentage" class="form-label">Descuento (%)</label>
+                            <input type="number" class="form-control" id="discount_percentage" name="discount_percentage" 
+                                   step="0.01" min="0" max="100" value="{{ form.discount_percentage.value|default:'0' }}">
+                            <div class="form-text">Descuento automático aplicado a las compras</div>
+                            {% if form.discount_percentage.errors %}
+                                <div class="text-danger small">{{ form.discount_percentage.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Notas</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="3" 
+                                      maxlength="500">{{ form.notes.value|default:'' }}</textarea>
+                            <div class="form-text">Información adicional sobre el cliente (máximo 500 caracteres)</div>
+                            {% if form.notes.errors %}
+                                <div class="text-danger small">{{ form.notes.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                                           {% if form.is_active.value != False %}checked{% endif %}>
+                                    <label class="form-check-label" for="is_active">
+                                        Cliente activo
+                                    </label>
+                                    <div class="form-text">Los clientes inactivos no pueden realizar pedidos</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="receive_notifications" name="receive_notifications" checked>
+                                    <label class="form-check-label" for="receive_notifications">
+                                        Recibir notificaciones
+                                    </label>
+                                    <div class="form-text">Emails sobre pedidos, promociones, etc.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'panel:customers_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Guardar Cliente
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    padding: 1rem 1.25rem;
+}
+
+.form-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.text-danger {
+    font-size: 0.875rem;
+}
+
+.form-text {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+h6.text-muted {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.875rem;
+    letter-spacing: 0.5px;
+}
+
+@media (max-width: 768px) {
+    .d-flex {
+        flex-direction: column;
+        align-items: flex-start !important;
+    }
+    
+    .d-flex > a, .d-flex > button {
+        margin-top: 0.5rem;
+        width: 100%;
+    }
+}
+</style>
+
+<script>
+// Validación de email en tiempo real
+document.getElementById('email').addEventListener('blur', function() {
+    const email = this.value;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (email && !emailRegex.test(email)) {
+        this.setCustomValidity('Por favor ingresa un email válido');
+        this.classList.add('is-invalid');
+    } else {
+        this.setCustomValidity('');
+        this.classList.remove('is-invalid');
+    }
+});
+
+// Formateo automático de teléfono
+document.getElementById('phone').addEventListener('input', function() {
+    let value = this.value.replace(/\D/g, '');
+    if (value.length > 0) {
+        if (value.length <= 10) {
+            value = value.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+        } else {
+            value = value.replace(/(\d{1})(\d{3})(\d{3})(\d{4})/, '+$1-$2-$3-$4');
+        }
+    }
+    this.value = value;
+});
+
+// Mostrar/ocultar campos de empresa según el tipo de cliente
+document.getElementById('customer_type').addEventListener('change', function() {
+    const companyField = document.getElementById('company').closest('.mb-3');
+    const creditLimitField = document.getElementById('credit_limit').closest('.mb-3');
+    
+    if (this.value === 'wholesale' || this.value === 'distributor') {
+        companyField.style.display = 'block';
+        creditLimitField.style.display = 'block';
+        document.getElementById('company').setAttribute('required', 'required');
+    } else {
+        companyField.style.display = 'block'; // Mantener visible pero no requerido
+        creditLimitField.style.display = 'block';
+        document.getElementById('company').removeAttribute('required');
+    }
+});
+
+// Contador de caracteres para notas
+document.getElementById('notes').addEventListener('input', function() {
+    const maxLength = 500;
+    const currentLength = this.value.length;
+    const remaining = maxLength - currentLength;
+    
+    let helpText = this.nextElementSibling;
+    if (helpText && helpText.classList.contains('form-text')) {
+        helpText.textContent = `Información adicional sobre el cliente (${remaining} caracteres restantes)`;
+        
+        if (remaining < 50) {
+            helpText.classList.add('text-warning');
+        } else {
+            helpText.classList.remove('text-warning');
+        }
+    }
+});
+
+// Validación de descuento
+document.getElementById('discount_percentage').addEventListener('input', function() {
+    const value = parseFloat(this.value);
+    if (value < 0 || value > 100) {
+        this.setCustomValidity('El descuento debe estar entre 0% y 100%');
+    } else {
+        this.setCustomValidity('');
+    }
+});
+</script>
+{% endblock %}

@@ -20,6 +20,8 @@ class StockLot(models.Model):
     qty_on_hand = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     unit_cost = models.DecimalField(max_digits=12, decimal_places=2)
     warehouse = models.ForeignKey(Warehouse, null=True, blank=True, on_delete=models.PROTECT)
+    is_quarantined = models.BooleanField(default=False, help_text="Lote en cuarentena, no disponible para venta")
+    is_reserved = models.BooleanField(default=False, help_text="Lote reservado, no disponible para asignación automática")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -52,6 +54,10 @@ class Movement(models.Model):
         constraints = [
             models.CheckConstraint(check=Q(qty__gt=0), name="ck_movement_qty_positive"),
         ]
+        indexes = [
+            models.Index(fields=['product', 'created_at'], name='idx_movement_product_date'),
+            models.Index(fields=['type', 'created_at'], name='idx_movement_type_date'),
+        ]
 
     def __str__(self) -> str:  # pragma: no cover
-        return f"{self.type} {self.product_id} {self.qty}"
+        return f"{self.type.title()} · {self.product.code} · {self.qty}"

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalle de Venta - {{ sale_info.sale_id|truncatechars:12 }}</title>
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-dark: #2563eb;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-500: #6b7280;
+            --gray-700: #374151;
+            --gray-900: #111827;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--gray-50);
+            color: var(--gray-900);
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--gray-200);
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 15px;
+        }
+
+        .nav-links a {
+            padding: 8px 16px;
+            background: var(--primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        .nav-links a:hover {
+            background: var(--primary-dark);
+        }
+
+        .nav-links .btn-csv {
+            background: var(--success);
+        }
+
+        .nav-links .btn-csv:hover {
+            background: #059669;
+        }
+
+        .sale-info {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 1.1rem;
+            color: var(--gray-900);
+        }
+
+        .sale-id {
+            font-family: monospace;
+            font-size: 0.9rem;
+            background: var(--gray-100);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .section {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            background: var(--gray-50);
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--gray-900);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        th {
+            background: var(--gray-50);
+            font-weight: 600;
+            color: var(--gray-700);
+            font-size: 0.9rem;
+        }
+
+        tr:hover {
+            background: var(--gray-50);
+        }
+
+        .product-name {
+            font-weight: 500;
+            color: var(--gray-900);
+        }
+
+        .product-code {
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: var(--gray-600);
+        }
+
+        .lot-code {
+            font-family: monospace;
+            font-weight: 500;
+            color: var(--primary);
+        }
+
+        .qty {
+            font-weight: 500;
+            text-align: right;
+        }
+
+        .expiry-date {
+            font-size: 0.9rem;
+        }
+
+        .expiry-soon {
+            color: var(--warning);
+            font-weight: 500;
+        }
+
+        .expiry-expired {
+            color: var(--danger);
+            font-weight: 500;
+        }
+
+        .override-badge {
+            background: var(--warning);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .override-reason {
+            font-style: italic;
+            color: var(--gray-600);
+            font-size: 0.9rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--gray-500);
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 15px;
+                align-items: stretch;
+            }
+            
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            table {
+                font-size: 14px;
+            }
+            
+            th, td {
+                padding: 8px 10px;
+            }
+            
+            .nav-links {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Detalle de Venta</h1>
+            <div class="nav-links">
+                <a href="{% url 'pos_history' %}">← Volver al Historial</a>
+                <a href="{% url 'pos_sale_lots_csv' sale_info.sale_id %}" class="btn-csv">📄 Exportar CSV</a>
+            </div>
+        </div>
+
+        <div class="sale-info">
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">ID de Venta</div>
+                    <div class="info-value sale-id">{{ sale_info.sale_id }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Fecha y Hora</div>
+                    <div class="info-value">{{ sale_info.date|date:"d/m/Y H:i:s" }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Vendedor</div>
+                    <div class="info-value">{{ sale_info.seller }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Total Items</div>
+                    <div class="info-value">{{ sale_info.total_items }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Cantidad Total</div>
+                    <div class="info-value">{{ sale_info.total_qty|floatformat:3 }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title">Movimientos de Stock</h2>
+            </div>
+            {% if movements %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Lote</th>
+                            <th>Fecha Vencimiento</th>
+                            <th>Cantidad</th>
+                            <th>Costo Unitario</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for movement in movements %}
+                        <tr>
+                            <td>
+                                <div class="product-name">{{ movement.product.name }}</div>
+                                <div class="product-code">{{ movement.product.code }}</div>
+                            </td>
+                            <td>
+                                <span class="lot-code">{{ movement.lot.lot_code }}</span>
+                                {% for override in overrides %}
+                                    {% if override.lot_chosen.id == movement.lot.id and override.product.id == movement.product.id %}
+                                        <div><span class="override-badge">OVERRIDE</span></div>
+                                    {% endif %}
+                                {% endfor %}
+                            </td>
+                            <td>
+                                {% if movement.lot.expiry_date %}
+                                    {% now "Y-m-d" as today %}
+                                    {% if movement.lot.expiry_date|date:"Y-m-d" < today %}
+                                        <span class="expiry-date expiry-expired">{{ movement.lot.expiry_date|date:"d/m/Y" }}</span>
+                                    {% elif movement.lot.expiry_date|timeuntil|slice:":2" == "0 " %}
+                                        <span class="expiry-date expiry-soon">{{ movement.lot.expiry_date|date:"d/m/Y" }}</span>
+                                    {% else %}
+                                        <span class="expiry-date">{{ movement.lot.expiry_date|date:"d/m/Y" }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="expiry-date">Sin fecha</span>
+                                {% endif %}
+                            </td>
+                            <td class="qty">{{ movement.qty_consumed|floatformat:3 }}</td>
+                            <td>${{ movement.lot.unit_cost|floatformat:2 }}</td>
+                            <td>{{ movement.created_at|date:"d/m/Y H:i:s" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="empty-state">
+                    <p>No se encontraron movimientos para esta venta.</p>
+                </div>
+            {% endif %}
+        </div>
+
+        {% if overrides %}
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title">Overrides de Lotes</h2>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Lote Elegido</th>
+                        <th>Cantidad</th>
+                        <th>Razón</th>
+                        <th>Usuario</th>
+                        <th>Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for override in overrides %}
+                    <tr>
+                        <td>
+                            <div class="product-name">{{ override.product.name }}</div>
+                            <div class="product-code">{{ override.product.code }}</div>
+                        </td>
+                        <td>
+                            <span class="lot-code">{{ override.lot_chosen.lot_code }}</span>
+                        </td>
+                        <td class="qty">{{ override.qty|floatformat:3 }}</td>
+                        <td>
+                            <div class="override-reason">{{ override.reason }}</div>
+                        </td>
+                        <td>{{ override.actor.username }}</td>
+                        <td>{{ override.timestamp|date:"d/m/Y H:i:s" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

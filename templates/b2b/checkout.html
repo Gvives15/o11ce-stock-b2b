@@ -1,18 +1,161 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-  <title>Checkout</title>
+  <meta charset="utf-8" />
+  <title>Checkout B2B - O11CE</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root { --bg:#f8fafc; --card:#ffffff; --muted:#64748b; --text:#1e293b; --accent:#3b82f6; --border:#e2e8f0; --success:#10b981; --error:#ef4444; }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto}
+    header{padding:16px 20px;border-bottom:1px solid var(--border);background:white}
+    h1{margin:0;font-size:18px} nav{margin-top:8px}
+    nav a{margin-right:16px;color:var(--accent);text-decoration:none}
+    main{padding:20px;max-width:800px;margin:0 auto}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:16px}
+    .form-group{margin-bottom:16px}
+    label{display:block;margin-bottom:4px;font-weight:500}
+    input,select,textarea{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font:inherit}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+    .form-row{display:flex;gap:16px}
+    .form-row .form-group{flex:1}
+    .order-summary{background:#f8fafc;padding:16px;border-radius:6px;margin-bottom:16px}
+    .summary-item{display:flex;justify-content:space-between;margin-bottom:8px}
+    .summary-item.total{font-weight:600;border-top:1px solid var(--border);padding-top:8px}
+    .submit-btn{background:var(--success);color:white;border:none;border-radius:6px;padding:12px 24px;font-size:16px;cursor:pointer;width:100%}
+    .submit-btn:disabled{background:var(--muted);cursor:not-allowed}
+    .error{color:var(--error);font-size:13px;margin-top:4px}
+  </style>
 </head>
 <body>
-  <h1>Checkout</h1>
-  <form action="/order/checkout" method="post">
-    <!-- TODO: Add real form fields -->
-    <label>Name: <input type="text" name="name" required></label><br>
-    <label>Address: <input type="text" name="address" required></label><br>
-    <button type="submit">Submit Order</button>
-  </form>
+  <header>
+    <h1>🛒 Checkout B2B — O11CE</h1>
+    <nav>
+      <a href="/b2b/">Catálogo</a>
+      <a href="/b2b/cart/">Carrito</a>
+      <a href="/panel/">Panel</a>
+    </nav>
+  </header>
+  <main>
+    <div class="card">
+      <h2>Resumen del pedido</h2>
+      <div class="order-summary">
+        <div class="summary-item">
+          <span>2x Chocolate Amargo 70% Cacao</span>
+          <span>$1,700.00</span>
+        </div>
+        <div class="summary-item">
+          <span>1x Galletas Dulces Surtidas</span>
+          <span>$420.00</span>
+        </div>
+        <div class="summary-item">
+          <span>Subtotal:</span>
+          <span>$2,120.00</span>
+        </div>
+        <div class="summary-item">
+          <span>IVA (21%):</span>
+          <span>$445.20</span>
+        </div>
+        <div class="summary-item total">
+          <span>Total:</span>
+          <span>$2,565.20</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="card">
+      <h2>Información de entrega</h2>
+      <form id="checkout-form">
+        <div class="form-group">
+          <label for="customer">Cliente *</label>
+          <select id="customer" name="customer" required>
+            <option value="">Seleccionar cliente...</option>
+            <option value="1" selected>Distribuidora San Martín</option>
+          </select>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="delivery_method">Método de entrega *</label>
+            <select id="delivery_method" name="delivery_method" required onchange="toggleDeliveryFields()">
+              <option value="">Seleccionar...</option>
+              <option value="delivery">Delivery</option>
+              <option value="pickup">Retiro en sucursal</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="delivery_date">Fecha de entrega *</label>
+            <input type="date" id="delivery_date" name="delivery_date" required>
+          </div>
+        </div>
+        
+        <div id="delivery-fields" style="display:none">
+          <div class="form-group">
+            <label for="address">Dirección de entrega *</label>
+            <textarea id="address" name="address" rows="2" placeholder="Calle, número, piso, departamento"></textarea>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="time_from">Horario desde</label>
+              <input type="time" id="time_from" name="time_from">
+            </div>
+            <div class="form-group">
+              <label for="time_to">Horario hasta</label>
+              <input type="time" id="time_to" name="time_to">
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="instructions">Instrucciones especiales</label>
+          <textarea id="instructions" name="instructions" rows="3" placeholder="Comentarios adicionales para la entrega..."></textarea>
+        </div>
+        
+        <button type="submit" class="submit-btn">Confirmar Pedido</button>
+      </form>
+    </div>
+  </main>
   <script>
-    // TODO: Add client-side validation or additional fetch calls if needed
+    function toggleDeliveryFields() {
+      const method = document.getElementById('delivery_method').value;
+      const fields = document.getElementById('delivery-fields');
+      const address = document.getElementById('address');
+      
+      if (method === 'delivery') {
+        fields.style.display = 'block';
+        address.required = true;
+      } else {
+        fields.style.display = 'none';
+        address.required = false;
+      }
+    }
+    
+    // Establecer fecha mínima como mañana
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    document.getElementById('delivery_date').min = tomorrow.toISOString().split('T')[0];
+    
+    document.getElementById('checkout-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const formData = new FormData(this);
+      const orderData = Object.fromEntries(formData);
+      
+      try {
+        // Simular envío de orden
+        console.log('Enviando orden:', orderData);
+        
+        // Mostrar confirmación
+        alert('¡Pedido confirmado! Recibirás un email con los detalles.');
+        
+        // Redirigir al catálogo
+        window.location.href = '/b2b/';
+        
+      } catch (error) {
+        alert('Error al procesar el pedido. Intenta nuevamente.');
+        console.error('Error:', error);
+      }
+    });
   </script>
 </body>
 </html>

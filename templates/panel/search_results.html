@@ -1,0 +1,225 @@
+{% extends 'panel/base.html' %}
+
+{% block title %}Resultados de Búsqueda — O11CE{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Resultados de Búsqueda</h1>
+    <p class="page-subtitle">Búsqueda: "{{ query }}" - {{ total_results }} resultado(s) encontrado(s)</p>
+</div>
+
+{% if products %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h2 class="card-title">Productos ({{ products|length }})</h2>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Categoría</th>
+                        <th>Stock</th>
+                        <th>Precio</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                    <tr>
+                        <td><code>{{ product.codigo }}</code></td>
+                        <td>
+                            <strong>{{ product.nombre }}</strong>
+                            {% if product.descripcion %}
+                                <br><small class="text-muted">{{ product.descripcion|truncatechars:50 }}</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ product.categoria|default:"-" }}</td>
+                        <td>
+                            <span class="badge {% if product.stock_actual <= product.stock_minimo %}badge-danger{% elif product.stock_actual <= product.stock_minimo|add:10 %}badge-warning{% else %}badge-success{% endif %}">
+                                {{ product.stock_actual }}
+                            </span>
+                        </td>
+                        <td>${{ product.precio_venta|floatformat:2 }}</td>
+                        <td>
+                            {% if product.activo %}
+                                <span class="badge badge-success">Activo</span>
+                            {% else %}
+                                <span class="badge badge-secondary">Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'panel:product_detail' product.id %}" class="btn btn-sm btn-outline-primary">Ver</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if orders %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h2 class="card-title">Pedidos ({{ orders|length }})</h2>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Cliente</th>
+                        <th>Fecha</th>
+                        <th>Estado</th>
+                        <th>Total</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td><code>#{{ order.id }}</code></td>
+                        <td>
+                            <strong>{{ order.cliente.nombre }}</strong>
+                            {% if order.cliente.telefono %}
+                                <br><small class="text-muted">{{ order.cliente.telefono }}</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ order.fecha_pedido|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            <span class="badge badge-{% if order.estado == 'pendiente' %}warning{% elif order.estado == 'completado' %}success{% elif order.estado == 'cancelado' %}danger{% else %}info{% endif %}">
+                                {{ order.get_estado_display }}
+                            </span>
+                        </td>
+                        <td>${{ order.total|floatformat:2 }}</td>
+                        <td>
+                            <a href="{% url 'panel:order_detail' order.id %}" class="btn btn-sm btn-outline-primary">Ver</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if customers %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h2 class="card-title">Clientes ({{ customers|length }})</h2>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Contacto</th>
+                        <th>Dirección</th>
+                        <th>Tipo</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for customer in customers %}
+                    <tr>
+                        <td>
+                            <strong>{{ customer.nombre }}</strong>
+                            {% if customer.empresa %}
+                                <br><small class="text-muted">{{ customer.empresa }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if customer.telefono %}
+                                <div>📞 {{ customer.telefono }}</div>
+                            {% endif %}
+                            {% if customer.email %}
+                                <div>✉️ {{ customer.email }}</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ customer.direccion|default:"-" }}</td>
+                        <td>
+                            <span class="badge badge-{% if customer.tipo_cliente == 'mayorista' %}primary{% else %}secondary{% endif %}">
+                                {{ customer.get_tipo_cliente_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if customer.activo %}
+                                <span class="badge badge-success">Activo</span>
+                            {% else %}
+                                <span class="badge badge-secondary">Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'panel:customer_detail' customer.id %}" class="btn btn-sm btn-outline-primary">Ver</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if stock_movements %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h2 class="card-title">Movimientos de Stock ({{ stock_movements|length }})</h2>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Producto</th>
+                        <th>Tipo</th>
+                        <th>Cantidad</th>
+                        <th>Motivo</th>
+                        <th>Usuario</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for movement in stock_movements %}
+                    <tr>
+                        <td>{{ movement.fecha|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            <strong>{{ movement.producto.nombre }}</strong>
+                            <br><small class="text-muted">{{ movement.producto.codigo }}</small>
+                        </td>
+                        <td>
+                            <span class="badge badge-{% if movement.tipo == 'entrada' %}success{% else %}danger{% endif %}">
+                                {{ movement.get_tipo_display }}
+                            </span>
+                        </td>
+                        <td>{{ movement.cantidad }}</td>
+                        <td>{{ movement.motivo|default:"-" }}</td>
+                        <td>{{ movement.usuario.username|default:"-" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if not products and not orders and not customers and not stock_movements %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <h3 class="text-muted">No se encontraron resultados</h3>
+        <p class="text-muted">Intenta con otros términos de búsqueda</p>
+        <a href="{% url 'panel:dashboard' %}" class="btn btn-primary">Volver al Dashboard</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

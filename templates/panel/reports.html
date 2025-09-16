@@ -1,0 +1,886 @@
+{% extends 'panel/base.html' %}
+{% load static %}
+
+{% block title %}Reportes - Panel Administrativo{% endblock %}
+
+{% block extra_css %}
+<style>
+    .reports-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        border-radius: 15px;
+        margin-bottom: 30px;
+        text-align: center;
+    }
+    
+    .page-header h1 {
+        margin: 0 0 10px 0;
+        font-size: 32px;
+    }
+    
+    .page-header p {
+        margin: 0;
+        opacity: 0.9;
+        font-size: 16px;
+    }
+    
+    .reports-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 25px;
+        margin-bottom: 30px;
+    }
+    
+    .report-card {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .report-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+    
+    .report-header {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .report-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        color: white;
+    }
+    
+    .icon-sales { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .icon-inventory { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .icon-customers { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .icon-financial { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+    .icon-performance { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+    .icon-custom { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); }
+    
+    .report-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+        margin: 0;
+    }
+    
+    .report-description {
+        color: #6c757d;
+        font-size: 14px;
+        margin-bottom: 20px;
+        line-height: 1.5;
+    }
+    
+    .report-form {
+        margin-bottom: 20px;
+    }
+    
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .form-group {
+        margin-bottom: 15px;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 600;
+        color: #333;
+        font-size: 12px;
+        text-transform: uppercase;
+    }
+    
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        padding: 10px;
+        border: 2px solid #e1e5e9;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.3s ease;
+    }
+    
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .btn {
+        padding: 12px 20px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.3s ease;
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+        margin-top: 10px;
+    }
+    
+    .btn-secondary:hover {
+        background: #5a6268;
+        transform: translateY(-2px);
+    }
+    
+    .btn-success {
+        background: #28a745;
+        color: white;
+        margin-top: 10px;
+    }
+    
+    .btn-success:hover {
+        background: #218838;
+        transform: translateY(-2px);
+    }
+    
+    .quick-stats {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        margin-bottom: 30px;
+    }
+    
+    .stats-header {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 25px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #f8f9fa;
+    }
+    
+    .stats-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        color: white;
+    }
+    
+    .stats-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+        margin: 0;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+    }
+    
+    .stat-item {
+        text-align: center;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 12px;
+    }
+    
+    .stat-number {
+        font-size: 28px;
+        font-weight: 600;
+        color: #667eea;
+        margin-bottom: 5px;
+    }
+    
+    .stat-label {
+        font-size: 12px;
+        color: #6c757d;
+        text-transform: uppercase;
+        font-weight: 600;
+    }
+    
+    .recent-reports {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+    
+    .recent-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #f8f9fa;
+    }
+    
+    .recent-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+        margin: 0;
+    }
+    
+    .report-item {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 15px;
+        border-radius: 10px;
+        background: #f8f9fa;
+        margin-bottom: 10px;
+        transition: background-color 0.3s ease;
+    }
+    
+    .report-item:hover {
+        background: #e9ecef;
+    }
+    
+    .report-item-icon {
+        width: 35px;
+        height: 35px;
+        border-radius: 8px;
+        background: #667eea;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+    }
+    
+    .report-item-content {
+        flex: 1;
+    }
+    
+    .report-item-title {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 2px;
+    }
+    
+    .report-item-date {
+        font-size: 12px;
+        color: #6c757d;
+    }
+    
+    .report-item-actions {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 12px;
+        border-radius: 6px;
+    }
+    
+    .loading {
+        display: none;
+        text-align: center;
+        padding: 20px;
+        color: #6c757d;
+    }
+    
+    .loading.show {
+        display: block;
+    }
+    
+    @media (max-width: 768px) {
+        .reports-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+        
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .recent-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        
+        .report-item {
+            flex-direction: column;
+            text-align: center;
+        }
+        
+        .report-item-actions {
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="reports-container">
+    <div class="page-header">
+        <h1><i class="fas fa-chart-bar"></i> Centro de Reportes</h1>
+        <p>Genera informes detallados para analizar el rendimiento de tu negocio</p>
+    </div>
+    
+    <!-- Estadísticas Rápidas -->
+    <div class="quick-stats">
+        <div class="stats-header">
+            <div class="stats-icon">
+                <i class="fas fa-tachometer-alt"></i>
+            </div>
+            <h3 class="stats-title">Resumen Ejecutivo</h3>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-number">${{ total_sales|default:"45,230" }}</div>
+                <div class="stat-label">Ventas del Mes</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">{{ total_orders|default:"156" }}</div>
+                <div class="stat-label">Órdenes Procesadas</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">{{ total_customers|default:"89" }}</div>
+                <div class="stat-label">Nuevos Clientes</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">{{ inventory_value|default:"12,450" }}</div>
+                <div class="stat-label">Valor Inventario</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Generadores de Reportes -->
+    <div class="reports-grid">
+        <!-- Reporte de Ventas -->
+        <div class="report-card">
+            <div class="report-header">
+                <div class="report-icon icon-sales">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <h3 class="report-title">Reporte de Ventas</h3>
+            </div>
+            <p class="report-description">
+                Analiza las ventas por período, productos más vendidos, tendencias y comparativas.
+            </p>
+            
+            <form class="report-form" id="salesReportForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="sales_start_date">Fecha Inicio</label>
+                        <input type="date" id="sales_start_date" name="start_date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="sales_end_date">Fecha Fin</label>
+                        <input type="date" id="sales_end_date" name="end_date" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="sales_group_by">Agrupar Por</label>
+                    <select id="sales_group_by" name="group_by">
+                        <option value="day">Día</option>
+                        <option value="week">Semana</option>
+                        <option value="month" selected>Mes</option>
+                        <option value="product">Producto</option>
+                        <option value="customer">Cliente</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-download"></i> Generar Reporte
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="previewReport('sales')">
+                    <i class="fas fa-eye"></i> Vista Previa
+                </button>
+            </form>
+        </div>
+        
+        <!-- Reporte de Inventario -->
+        <div class="report-card">
+            <div class="report-header">
+                <div class="report-icon icon-inventory">
+                    <i class="fas fa-boxes"></i>
+                </div>
+                <h3 class="report-title">Reporte de Inventario</h3>
+            </div>
+            <p class="report-description">
+                Controla el stock, productos con bajo inventario, rotación y valorización.
+            </p>
+            
+            <form class="report-form" id="inventoryReportForm">
+                <div class="form-group">
+                    <label for="inventory_type">Tipo de Reporte</label>
+                    <select id="inventory_type" name="report_type">
+                        <option value="current">Stock Actual</option>
+                        <option value="low_stock">Stock Bajo</option>
+                        <option value="movements">Movimientos</option>
+                        <option value="valuation">Valorización</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="inventory_category">Categoría</label>
+                    <select id="inventory_category" name="category">
+                        <option value="all">Todas las Categorías</option>
+                        <option value="electronics">Electrónicos</option>
+                        <option value="clothing">Ropa</option>
+                        <option value="home">Hogar</option>
+                        <option value="books">Libros</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-download"></i> Generar Reporte
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="previewReport('inventory')">
+                    <i class="fas fa-eye"></i> Vista Previa
+                </button>
+            </form>
+        </div>
+        
+        <!-- Reporte de Clientes -->
+        <div class="report-card">
+            <div class="report-header">
+                <div class="report-icon icon-customers">
+                    <i class="fas fa-users"></i>
+                </div>
+                <h3 class="report-title">Reporte de Clientes</h3>
+            </div>
+            <p class="report-description">
+                Analiza el comportamiento de clientes, segmentación y análisis de valor.
+            </p>
+            
+            <form class="report-form" id="customersReportForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="customers_start_date">Fecha Inicio</label>
+                        <input type="date" id="customers_start_date" name="start_date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="customers_end_date">Fecha Fin</label>
+                        <input type="date" id="customers_end_date" name="end_date" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="customer_segment">Segmento</label>
+                    <select id="customer_segment" name="segment">
+                        <option value="all">Todos los Clientes</option>
+                        <option value="new">Nuevos Clientes</option>
+                        <option value="returning">Clientes Recurrentes</option>
+                        <option value="vip">Clientes VIP</option>
+                        <option value="inactive">Clientes Inactivos</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-download"></i> Generar Reporte
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="previewReport('customers')">
+                    <i class="fas fa-eye"></i> Vista Previa
+                </button>
+            </form>
+        </div>
+        
+        <!-- Reporte Financiero -->
+        <div class="report-card">
+            <div class="report-header">
+                <div class="report-icon icon-financial">
+                    <i class="fas fa-dollar-sign"></i>
+                </div>
+                <h3 class="report-title">Reporte Financiero</h3>
+            </div>
+            <p class="report-description">
+                Análisis de ingresos, gastos, márgenes de ganancia y flujo de caja.
+            </p>
+            
+            <form class="report-form" id="financialReportForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="financial_start_date">Fecha Inicio</label>
+                        <input type="date" id="financial_start_date" name="start_date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="financial_end_date">Fecha Fin</label>
+                        <input type="date" id="financial_end_date" name="end_date" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="financial_type">Tipo de Análisis</label>
+                    <select id="financial_type" name="analysis_type">
+                        <option value="profit_loss">Pérdidas y Ganancias</option>
+                        <option value="cash_flow">Flujo de Caja</option>
+                        <option value="margins">Análisis de Márgenes</option>
+                        <option value="expenses">Análisis de Gastos</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-download"></i> Generar Reporte
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="previewReport('financial')">
+                    <i class="fas fa-eye"></i> Vista Previa
+                </button>
+            </form>
+        </div>
+        
+        <!-- Reporte de Rendimiento -->
+        <div class="report-card">
+            <div class="report-header">
+                <div class="report-icon icon-performance">
+                    <i class="fas fa-chart-pie"></i>
+                </div>
+                <h3 class="report-title">Reporte de Rendimiento</h3>
+            </div>
+            <p class="report-description">
+                KPIs del negocio, métricas de rendimiento y análisis comparativo.
+            </p>
+            
+            <form class="report-form" id="performanceReportForm">
+                <div class="form-group">
+                    <label for="performance_period">Período</label>
+                    <select id="performance_period" name="period">
+                        <option value="last_week">Última Semana</option>
+                        <option value="last_month" selected>Último Mes</option>
+                        <option value="last_quarter">Último Trimestre</option>
+                        <option value="last_year">Último Año</option>
+                        <option value="custom">Personalizado</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="performance_metrics">Métricas</label>
+                    <select id="performance_metrics" name="metrics" multiple>
+                        <option value="sales_growth">Crecimiento de Ventas</option>
+                        <option value="customer_acquisition">Adquisición de Clientes</option>
+                        <option value="inventory_turnover">Rotación de Inventario</option>
+                        <option value="profit_margin">Margen de Ganancia</option>
+                        <option value="order_fulfillment">Cumplimiento de Órdenes</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-download"></i> Generar Reporte
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="previewReport('performance')">
+                    <i class="fas fa-eye"></i> Vista Previa
+                </button>
+            </form>
+        </div>
+        
+        <!-- Reporte Personalizado -->
+        <div class="report-card">
+            <div class="report-header">
+                <div class="report-icon icon-custom">
+                    <i class="fas fa-cogs"></i>
+                </div>
+                <h3 class="report-title">Reporte Personalizado</h3>
+            </div>
+            <p class="report-description">
+                Crea reportes personalizados combinando diferentes métricas y filtros.
+            </p>
+            
+            <form class="report-form" id="customReportForm">
+                <div class="form-group">
+                    <label for="custom_name">Nombre del Reporte</label>
+                    <input type="text" id="custom_name" name="report_name" placeholder="Mi Reporte Personalizado">
+                </div>
+                <div class="form-group">
+                    <label for="custom_data_sources">Fuentes de Datos</label>
+                    <select id="custom_data_sources" name="data_sources" multiple>
+                        <option value="sales">Ventas</option>
+                        <option value="inventory">Inventario</option>
+                        <option value="customers">Clientes</option>
+                        <option value="orders">Órdenes</option>
+                        <option value="products">Productos</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-magic"></i> Crear Reporte
+                </button>
+                <button type="button" class="btn btn-success" onclick="saveTemplate()">
+                    <i class="fas fa-save"></i> Guardar Plantilla
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Reportes Recientes -->
+    <div class="recent-reports">
+        <div class="recent-header">
+            <h3 class="recent-title">Reportes Recientes</h3>
+            <a href="#" class="btn btn-sm btn-secondary">
+                <i class="fas fa-history"></i> Ver Historial
+            </a>
+        </div>
+        
+        <div class="report-item">
+            <div class="report-item-icon">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="report-item-content">
+                <div class="report-item-title">Reporte de Ventas - Enero 2024</div>
+                <div class="report-item-date">Generado el 15 de Enero, 2024</div>
+            </div>
+            <div class="report-item-actions">
+                <button class="btn btn-sm btn-primary">
+                    <i class="fas fa-download"></i> Descargar
+                </button>
+                <button class="btn btn-sm btn-secondary">
+                    <i class="fas fa-eye"></i> Ver
+                </button>
+            </div>
+        </div>
+        
+        <div class="report-item">
+            <div class="report-item-icon">
+                <i class="fas fa-boxes"></i>
+            </div>
+            <div class="report-item-content">
+                <div class="report-item-title">Inventario - Stock Bajo</div>
+                <div class="report-item-date">Generado el 12 de Enero, 2024</div>
+            </div>
+            <div class="report-item-actions">
+                <button class="btn btn-sm btn-primary">
+                    <i class="fas fa-download"></i> Descargar
+                </button>
+                <button class="btn btn-sm btn-secondary">
+                    <i class="fas fa-eye"></i> Ver
+                </button>
+            </div>
+        </div>
+        
+        <div class="report-item">
+            <div class="report-item-icon">
+                <i class="fas fa-users"></i>
+            </div>
+            <div class="report-item-content">
+                <div class="report-item-title">Análisis de Clientes - Q4 2023</div>
+                <div class="report-item-date">Generado el 8 de Enero, 2024</div>
+            </div>
+            <div class="report-item-actions">
+                <button class="btn btn-sm btn-primary">
+                    <i class="fas fa-download"></i> Descargar
+                </button>
+                <button class="btn btn-sm btn-secondary">
+                    <i class="fas fa-eye"></i> Ver
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Indicator -->
+    <div class="loading" id="loadingIndicator">
+        <i class="fas fa-spinner fa-spin fa-2x"></i>
+        <p>Generando reporte...</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Establecer fechas por defecto
+    document.addEventListener('DOMContentLoaded', function() {
+        const today = new Date();
+        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+        
+        // Formatear fechas para inputs
+        const formatDate = (date) => {
+            return date.toISOString().split('T')[0];
+        };
+        
+        // Establecer fechas por defecto en todos los formularios
+        document.querySelectorAll('input[name="start_date"]').forEach(input => {
+            input.value = formatDate(lastMonth);
+        });
+        
+        document.querySelectorAll('input[name="end_date"]').forEach(input => {
+            input.value = formatDate(today);
+        });
+    });
+    
+    // Manejar envío de formularios de reportes
+    document.querySelectorAll('.report-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const reportType = this.id.replace('ReportForm', '');
+            
+            // Mostrar indicador de carga
+            showLoading();
+            
+            // Simular generación de reporte
+            setTimeout(() => {
+                hideLoading();
+                downloadReport(reportType, formData);
+            }, 2000);
+        });
+    });
+    
+    // Función para mostrar loading
+    function showLoading() {
+        document.getElementById('loadingIndicator').classList.add('show');
+    }
+    
+    // Función para ocultar loading
+    function hideLoading() {
+        document.getElementById('loadingIndicator').classList.remove('show');
+    }
+    
+    // Función para descargar reporte
+    function downloadReport(type, formData) {
+        // En una implementación real, esto haría una petición al servidor
+        const fileName = `reporte_${type}_${new Date().toISOString().split('T')[0]}.pdf`;
+        
+        // Simular descarga
+        const link = document.createElement('a');
+        link.href = '#';
+        link.download = fileName;
+        link.click();
+        
+        // Mostrar mensaje de éxito
+        showSuccessMessage(`Reporte ${type} generado exitosamente`);
+    }
+    
+    // Función para vista previa
+    function previewReport(type) {
+        showLoading();
+        
+        setTimeout(() => {
+            hideLoading();
+            // En una implementación real, esto abriría una ventana con la vista previa
+            window.open(`/panel/reports/preview/${type}/`, '_blank');
+        }, 1000);
+    }
+    
+    // Función para guardar plantilla
+    function saveTemplate() {
+        const form = document.getElementById('customReportForm');
+        const formData = new FormData(form);
+        
+        if (!formData.get('report_name')) {
+            showErrorMessage('Por favor, ingresa un nombre para la plantilla');
+            return;
+        }
+        
+        showLoading();
+        
+        setTimeout(() => {
+            hideLoading();
+            showSuccessMessage('Plantilla guardada exitosamente');
+            form.reset();
+        }, 1000);
+    }
+    
+    // Función para mostrar mensaje de éxito
+    function showSuccessMessage(message) {
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-success';
+        alert.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #d4edda;
+            color: #155724;
+            padding: 15px 20px;
+            border-radius: 8px;
+            border: 1px solid #c3e6cb;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        `;
+        alert.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
+        
+        document.body.appendChild(alert);
+        
+        setTimeout(() => {
+            alert.remove();
+        }, 3000);
+    }
+    
+    // Función para mostrar mensaje de error
+    function showErrorMessage(message) {
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-danger';
+        alert.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px 20px;
+            border-radius: 8px;
+            border: 1px solid #f5c6cb;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        `;
+        alert.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
+        
+        document.body.appendChild(alert);
+        
+        setTimeout(() => {
+            alert.remove();
+        }, 3000);
+    }
+    
+    // Validación de fechas
+    document.querySelectorAll('input[type="date"]').forEach(input => {
+        input.addEventListener('change', function() {
+            const form = this.closest('form');
+            const startDate = form.querySelector('input[name="start_date"]');
+            const endDate = form.querySelector('input[name="end_date"]');
+            
+            if (startDate && endDate && startDate.value && endDate.value) {
+                if (new Date(startDate.value) > new Date(endDate.value)) {
+                    showErrorMessage('La fecha de inicio no puede ser mayor que la fecha de fin');
+                    this.value = '';
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

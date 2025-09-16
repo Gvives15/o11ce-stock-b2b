@@ -28,11 +28,48 @@ class Order(models.Model):
     delivery_window_to = models.TimeField(null=True, blank=True)
     delivery_instructions = models.TextField(blank=True)
     requested_delivery_date = models.DateField(null=True, blank=True)
+    
+    # Idempotencia simple
+    client_req_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                check=Q(subtotal__gte=0), 
+                name="ck_order_subtotal_non_negative"
+            ),
+            models.CheckConstraint(
+                check=Q(discount_total__gte=0), 
+                name="ck_order_discount_non_negative"
+            ),
+            models.CheckConstraint(
+                check=Q(tax_total__gte=0), 
+                name="ck_order_tax_non_negative"
+            ),
+            models.CheckConstraint(
+                check=Q(total__gte=0), 
+                name="ck_order_total_non_negative"
+            ),
+            models.CheckConstraint(
+                check=Q(delivery_window_to__gte=models.F('delivery_window_from')) | Q(delivery_window_from__isnull=True) | Q(delivery_window_to__isnull=True), 
+                name="ck_order_valid_delivery_window"
+            ),
+            models.UniqueConstraint(
+                fields=['client_req_id'],
+                condition=Q(client_req_id__isnull=False),
+                name='uq_order_client_req_id'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['customer', 'status'], name='idx_order_customer_status'),
+            models.Index(fields=['status', 'created_at'], name='idx_order_status_date'),
+            models.Index(fields=['requested_delivery_date'], name='idx_order_delivery_date'),
+        ]
+
     def __str__(self) -> str:  # pragma: no cover
-        return f"Order {self.id}"
+        return f"Order #{self.id} · {self.customer.name}"
 
 
 class OrderItem(models.Model):
@@ -46,7 +83,11 @@ class OrderItem(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["order", "product"], name="uq_orderitem_per_product"),
             models.CheckConstraint(check=Q(qty__gt=0), name="ck_orderitem_qty_positive"),
+            models.CheckConstraint(check=Q(unit_price__gte=0), name="ck_orderitem_price_non_negative"),
+        ]
+        indexes = [
+            models.Index(fields=['order'], name='idx_orderitem_order'),
         ]
 
     def __str__(self) -> str:  # pragma: no cover
-        return f"{self.product_id} x {self.qty}"
+        return f"{self.product.code} × {self.qty}"

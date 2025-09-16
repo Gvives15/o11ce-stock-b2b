@@ -1,0 +1,148 @@
+{% extends 'panel/base.html' %}
+
+{% block title %}Gestión de Usuarios — O11CE{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Gestión de Usuarios</h1>
+    <p class="page-subtitle">Administra usuarios y asigna roles en el sistema</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2 class="card-title">Lista de Usuarios</h2>
+            <a href="{% url 'panel:user_create' %}" class="btn btn-primary">Crear Usuario</a>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if users %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Nombre</th>
+                            <th>Email</th>
+                            <th>Roles</th>
+                            <th>Estado</th>
+                            <th>Último acceso</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user_obj in users %}
+                        <tr>
+                            <td>
+                                <strong>{{ user_obj.username }}</strong>
+                                {% if user_obj.is_superuser %}
+                                    <span class="badge badge-danger">Superusuario</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ user_obj.first_name }} {{ user_obj.last_name }}</td>
+                            <td>{{ user_obj.email }}</td>
+                            <td>
+                                {% for group in user_obj.groups.all %}
+                                    <span class="badge badge-info">{{ group.name }}</span>
+                                {% empty %}
+                                    <span class="text-muted">Sin roles</span>
+                                {% endfor %}
+                            </td>
+                            <td>
+                                {% if user_obj.is_active %}
+                                    <span class="badge badge-success">Activo</span>
+                                {% else %}
+                                    <span class="badge badge-secondary">Inactivo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if user_obj.last_login %}
+                                    {{ user_obj.last_login|date:"d/m/Y H:i" }}
+                                {% else %}
+                                    <span class="text-muted">Nunca</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{% url 'panel:user_detail' user_obj.id %}" class="btn btn-sm btn-outline-primary">Ver</a>
+                                    <a href="{% url 'panel:user_edit' user_obj.id %}" class="btn btn-sm btn-outline-secondary">Editar</a>
+                                    {% if user_obj != user %}
+                                        <button class="btn btn-sm btn-outline-warning" onclick="toggleUserActive({{ user_obj.id }})">
+                                            {% if user_obj.is_active %}Desactivar{% else %}Activar{% endif %}
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-4">
+                <p class="text-muted">No hay usuarios registrados</p>
+                <a href="{% url 'panel:user_create' %}" class="btn btn-primary">Crear primer usuario</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Roles Disponibles</h2>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for group in groups %}
+            <div class="col-md-6 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ group.name }}</h5>
+                        <p class="card-text text-muted">
+                            {% if group.name == 'Admin' %}
+                                Acceso completo al sistema
+                            {% elif group.name == 'Encargado_Inventario' %}
+                                Gestión de inventario, pedidos y reportes
+                            {% elif group.name == 'Vendedor_Caja' %}
+                                Operaciones de venta en caja
+                            {% elif group.name == 'Vendedor_Ruta' %}
+                                Gestión de pedidos y clientes en ruta
+                            {% endif %}
+                        </p>
+                        <small class="text-muted">{{ group.user_set.count }} usuario(s) asignado(s)</small>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleUserActive(userId) {
+    if (confirm('¿Estás seguro de cambiar el estado de este usuario?')) {
+        fetch(`/panel/users/${userId}/toggle-active/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.message || 'Error al cambiar el estado del usuario');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al procesar la solicitud');
+        });
+    }
+}
+</script>
+{% endblock %}
