@@ -3,20 +3,23 @@
 from ninja import Router, Schema, Query
 from ninja.errors import HttpError
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.db import transaction
 from django.contrib.auth.models import User
+from django.utils import timezone
 import uuid
+import hashlib
+import json
 
 from apps.catalog.models import Product
 from apps.stock.models import StockLot, Movement
 from apps.stock.services import allocate_lots_fefo, record_exit_fefo, StockError, ExitError
 from apps.customers.models import Customer
 from apps.panel.security import has_scope
-from apps.pos.models import LotOverrideAudit
+from apps.pos.models import LotOverrideAudit, SaleIdempotencyKey
 
 router = Router()
 
@@ -40,6 +43,7 @@ class SaleIn(Schema):
     items: List[SaleItemIn]
     customer_id: Optional[int] = None
     override_pin: Optional[str] = None
+    idempotency_key: Optional[str] = None  # Clave de idempotencia
 
 
 class SaleMovementOut(Schema):
@@ -107,6 +111,106 @@ class ErrorOut(Schema):
 
 
 # ============================================================================
+# UTILIDADES DE IDEMPOTENCIA
+# ============================================================================
+
+def generate_request_hash(sale_data: SaleIn) -> str:
+    """
+    Genera un hash SHA256 del contenido de la request para detectar cambios.
+    Excluye idempotency_key del hash para evitar recursión.
+    """
+    # Crear una copia sin idempotency_key
+    data_dict = sale_data.dict()
+    data_dict.pop('idempotency_key', None)
+    
+    # Serializar de forma determinística
+    content = json.dumps(data_dict, sort_keys=True, default=str)
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
+def cleanup_expired_idempotency_keys():
+    """Limpia claves de idempotencia expiradas para mantener la DB limpia."""
+    expired_count = SaleIdempotencyKey.objects.filter(
+        expires_at__lt=timezone.now()
+    ).delete()[0]
+    return expired_count
+
+
+def check_idempotency(idempotency_key: str, user: User, request_hash: str):
+    """
+    Verifica idempotencia y maneja diferentes escenarios.
+    
+    Returns:
+        tuple: (should_process, response_data, status_code)
+        - should_process: bool - si debe procesar la request
+        - response_data: dict - datos de respuesta (si no debe procesar)
+        - status_code: int - código HTTP (si no debe procesar)
+    """
+    try:
+        existing = SaleIdempotencyKey.objects.get(
+            idempotency_key=idempotency_key,
+            user=user
+        )
+        
+        # Verificar si ha expirado
+        if existing.is_expired():
+            existing.delete()
+            return True, None, None  # Procesar como nueva request
+        
+        # Verificar si el contenido cambió
+        if existing.request_hash != request_hash:
+            return False, {
+                "error": "IDEMPOTENCY_CONFLICT", 
+                "detail": "El contenido de la request cambió para la misma clave de idempotencia"
+            }, 409
+        
+        # Si está en procesamiento, indicar que está siendo procesada
+        if existing.status == 'processing':
+            return False, {
+                "error": "PROCESSING", 
+                "detail": "La request está siendo procesada actualmente"
+            }, 202
+        
+        # Si falló, devolver el error original
+        if existing.status == 'failed':
+            return False, {
+                "error": "PREVIOUS_FAILURE", 
+                "detail": existing.error_message or "La request falló previamente"
+            }, 400
+        
+        # Si completó exitosamente, devolver la respuesta original (replay-safe)
+        if existing.status == 'completed':
+            # CORREGIDO: Reconstruir el objeto SaleOut desde response_data
+            response_data = existing.response_data
+            movements_out = []
+            
+            for mov_data in response_data.get('movements', []):
+                movements_out.append(SaleMovementOut(
+                    product_id=mov_data['product_id'],
+                    product_name=mov_data['product_name'],
+                    lot_id=mov_data['lot_id'],
+                    lot_code=mov_data['lot_code'],
+                    qty=Decimal(mov_data['qty']),
+                    unit_cost=Decimal(mov_data['unit_cost'])
+                ))
+            
+            replay_response = SaleOut(
+                sale_id=response_data['sale_id'],
+                total_items=response_data['total_items'],
+                movements=movements_out
+            )
+            
+            return False, replay_response, 200
+            
+    except SaleIdempotencyKey.DoesNotExist:
+        # No existe, procesar normalmente
+        return True, None, None
+    
+    # Fallback: procesar
+    return True, None, None
+
+
+# ============================================================================
 # ENDPOINTS
 # ============================================================================
 
@@ -116,7 +220,7 @@ def pos_health_check(request):
     return {"status": "ok", "service": "pos"}
 
 
-@router.post("/sale", response={200: SaleOut, 400: ErrorOut, 403: ErrorOut})
+@router.post("/sale", response={200: SaleOut, 400: ErrorOut, 403: ErrorOut, 409: ErrorOut, 202: ErrorOut})
 @transaction.atomic
 def create_pos_sale(request, sale_data: SaleIn):
     """
@@ -126,221 +230,316 @@ def create_pos_sale(request, sale_data: SaleIn):
     - Si lot_id está presente: usa ese lote específico (override)
     - Transacción atómica: todo o nada
     - Genera movimientos de salida por cada lote consumido
+    - Soporte para idempotencia con Idempotency-Key header
     """
     if not sale_data.items:
         return 400, {"error": "VALIDATION_ERROR", "detail": "La venta debe tener al menos un ítem"}
-    
-    # Generar ID único para la venta
-    sale_id = str(uuid.uuid4())
-    
     # Usuario autenticado (debe venir del request)
     if not request.user.is_authenticated:
         return 403, {"error": "AUTHENTICATION_REQUIRED", "detail": "Autenticación requerida"}
     
     user = request.user
     
-    # VALIDACIÓN BLOQUE D: Obtener cliente si se especifica
-    customer = None
-    if sale_data.customer_id:
+    # ============================================================================
+    # MANEJO DE IDEMPOTENCIA
+    # ============================================================================
+    idempotency_key = None
+    idempotency_record = None
+    
+    # Extraer Idempotency-Key del header o del payload
+    if hasattr(request, 'headers') and 'Idempotency-Key' in request.headers:
+        idempotency_key = request.headers['Idempotency-Key']
+    elif sale_data.idempotency_key:
+        idempotency_key = sale_data.idempotency_key
+    
+    if idempotency_key:
+        # Limpiar claves expiradas periódicamente
+        cleanup_expired_idempotency_keys()
+        
+        # Generar hash del request para verificar consistencia
+        request_hash = generate_request_hash(sale_data)
+        
+        # Verificar idempotencia
+        should_process, response_data, status_code = check_idempotency(
+            idempotency_key, user, request_hash
+        )
+        
+        if not should_process:
+            return status_code, response_data
+        
+        # Crear registro de idempotencia en estado "processing"
         try:
-            customer = Customer.objects.get(id=sale_data.customer_id)
-        except Customer.DoesNotExist:
-            return 400, {"error": "CUSTOMER_NOT_FOUND", "detail": f"Cliente {sale_data.customer_id} no encontrado"}
-
-    # FASE 1: Validaciones y planificación (sin modificar datos)
-    allocation_plans = []
+            idempotency_record = SaleIdempotencyKey.objects.create(
+                idempotency_key=idempotency_key,
+                user=user,
+                request_hash=request_hash,
+                status=SaleIdempotencyKey.Status.PROCESSING,
+                expires_at=SaleIdempotencyKey.get_expiry_time()
+            )
+        except Exception as e:
+            # Si falla la creación (ej: race condition), verificar de nuevo
+            should_process, response_data, status_code = check_idempotency(
+                idempotency_key, user, request_hash
+            )
+            if not should_process:
+                return status_code, response_data
+            # Si aún debe procesar, continuar sin idempotencia
     
-    for idx, item in enumerate(sale_data.items, 1):
-        # Asignar secuencia automáticamente si no se proporciona
-        if not hasattr(item, 'sequence') or item.sequence is None:
-            item.sequence = idx
-            
-        if item.qty <= 0:
-            return 400, {"error": "VALIDATION_ERROR", "detail": f"Cantidad debe ser mayor a 0 para producto {item.product_id}"}
-        
-        # Verificar que el producto existe
-        try:
-            product = get_object_or_404(Product, id=item.product_id)
-        except Http404:
-            return 400, {"error": "PRODUCT_NOT_FOUND", "detail": f"Producto {item.product_id} no encontrado"}
-        
-        # Validar precio unitario
-        if item.unit_price <= 0:
-            return 400, {"error": "VALIDATION_ERROR", "detail": f"Precio unitario debe ser mayor a 0 para producto {product.name}"}
-        
-        # Determinar estrategia: FEFO o Override
-        if item.lot_id is None:
-            # FEFO automático - solo planificar
-            try:
-                # VALIDACIÓN BLOQUE D: Aplicar vida útil mínima del cliente
-                min_shelf_life_days = customer.min_shelf_life_days if customer else 0
-                
-                allocation_plan = allocate_lots_fefo(
-                    product=product,
-                    qty_needed=item.qty,
-                    min_shelf_life_days=min_shelf_life_days
-                )
-                allocation_plans.append({
-                    'item': item,
-                    'product': product,
-                    'plan': allocation_plan,
-                    'type': 'fefo'
-                })
-            except StockError as e:
-                if e.code == "INSUFFICIENT_STOCK":
-                    return 400, {"error": "INSUFFICIENT_STOCK", "detail": f"Stock insuficiente para producto {product.name}: {str(e)}"}
-                elif e.code == "INSUFFICIENT_SHELF_LIFE":
-                    return 400, {"error": "INSUFFICIENT_SHELF_LIFE", "detail": f"Vida útil insuficiente para producto {product.name}: {str(e)}"}
-                else:
-                    return 400, {"error": e.code, "detail": str(e)}
-        else:
-            # Override de lote específico
-            if not item.lot_override_reason:
-                return 400, {"error": "VALIDATION_ERROR", "detail": "lot_override_reason es requerido cuando se especifica lot_id"}
-            
-            # Validar que el lote existe y está disponible
-            try:
-                lot = StockLot.objects.get(
-                    id=item.lot_id,
-                    product_id=item.product_id,
-                    qty_on_hand__gt=0
-                )
-            except StockLot.DoesNotExist:
-                return 400, {"error": "INVALID_LOT", "detail": f"Lote {item.lot_id} no encontrado"}
-            
-            # VALIDACIÓN BLOQUE D: Verificar flags de bloqueo
-            if lot.is_quarantined:
-                return 400, {"error": "LOT_BLOCKED", "detail": f"Lote {lot.lot_code} está en cuarentena"}
-            
-            if lot.is_reserved:
-                return 400, {"error": "LOT_BLOCKED", "detail": f"Lote {lot.lot_code} está reservado"}
-            
-            # VALIDACIÓN BLOQUE D: Verificar permisos para override
-            if not has_scope(user, 'pos_override'):
-                return 403, {"error": "PERMISSION_DENIED", "detail": "No tienes permisos para hacer override de lotes"}
-            
-            # VALIDACIÓN BLOQUE D: Verificar PIN si se proporciona
-            if sale_data.override_pin:
-                # Por simplicidad, usamos un PIN fijo. En producción sería más sofisticado
-                if sale_data.override_pin != "1234":
-                    return 403, {"error": "INVALID_PIN", "detail": "PIN de override inválido"}
-            
-            # Usar allocate_lots_fefo con override - solo planificar
-            try:
-                # VALIDACIÓN BLOQUE D: Verificar vida útil mínima también en override
-                min_shelf_life_days = customer.min_shelf_life_days if customer else 0
-                
-                # Si hay requisito de vida útil mínima, verificar el lote específico
-                if min_shelf_life_days > 0 and lot.expiry_date:
-                    from datetime import datetime, timedelta
-                    min_expiry_date = datetime.now().date() + timedelta(days=min_shelf_life_days)
-                    if lot.expiry_date < min_expiry_date:
-                        return 400, {"error": "INSUFFICIENT_SHELF_LIFE", "detail": f"Lote {lot.lot_code} no cumple vida útil mínima de {min_shelf_life_days} días"}
-                
-                allocation_plan = allocate_lots_fefo(
-                    product=product,
-                    qty_needed=item.qty,
-                    chosen_lot_id=item.lot_id,
-                    min_shelf_life_days=min_shelf_life_days
-                )
-                allocation_plans.append({
-                    'item': item,
-                    'product': product,
-                    'plan': allocation_plan,
-                    'type': 'override'
-                })
-            except StockError as e:
-                if e.code == "INSUFFICIENT_STOCK":
-                    return 400, {"error": "INSUFFICIENT_STOCK", "detail": f"Stock insuficiente para producto {product.name}: {str(e)}"}
-                else:
-                    return 400, {"error": e.code, "detail": str(e)}
-    
-    # FASE 2: Verificar disponibilidad de stock para todos los planes
-    for plan_data in allocation_plans:
-        for allocation in plan_data['plan']:
-            lot = StockLot.objects.select_for_update().get(id=allocation.lot_id)
-            if lot.qty_on_hand < allocation.qty_allocated:
-                return 400, {"error": "INSUFFICIENT_STOCK", "detail": f"Stock insuficiente en lote {lot.lot_code}"}
-    
-    # FASE 3: Ejecutar todos los cambios (solo si todo está validado)
-    all_movements = []
+    # Generar ID único para la venta
+    sale_id = str(uuid.uuid4())
     
     try:
-        for plan_data in allocation_plans:
-            item = plan_data['item']
-            product = plan_data['product']
-            allocation_plan = plan_data['plan']
-            plan_type = plan_data['type']
+        # VALIDACIÓN BLOQUE D: Obtener cliente si se especifica
+        customer = None
+        if sale_data.customer_id:
+            try:
+                customer = Customer.objects.get(id=sale_data.customer_id)
+            except Customer.DoesNotExist:
+                return 400, {"error": "CUSTOMER_NOT_FOUND", "detail": f"Cliente {sale_data.customer_id} no encontrado"}
+
+        # FASE 1: Validaciones y planificación (sin modificar datos)
+        allocation_plans = []
+        
+        for idx, item in enumerate(sale_data.items, 1):
+            # Asignar secuencia automáticamente si no se proporciona
+            if not hasattr(item, 'sequence') or item.sequence is None:
+                item.sequence = idx
+                
+            if item.qty <= 0:
+                return 400, {"error": "VALIDATION_ERROR", "detail": f"Cantidad debe ser mayor a 0 para producto {item.product_id}"}
             
-            # Ejecutar el plan de asignación
-            for allocation in allocation_plan:
-                lot = StockLot.objects.select_for_update().get(id=allocation.lot_id)
-                
-                # Reducir stock del lote
-                lot.qty_on_hand -= allocation.qty_allocated
-                lot.save(update_fields=["qty_on_hand"])
-                
-                # Determinar razón del movimiento
-                if plan_type == 'override' and allocation.lot_id == item.lot_id:
-                    reason = f"pos_sale_override: {item.lot_override_reason}"
+            # Verificar que el producto existe
+            try:
+                product = get_object_or_404(Product, id=item.product_id)
+            except Http404:
+                return 400, {"error": "PRODUCT_NOT_FOUND", "detail": f"Producto {item.product_id} no encontrado"}
+            
+            # Validar precio unitario
+            if item.unit_price <= 0:
+                return 400, {"error": "VALIDATION_ERROR", "detail": f"Precio unitario debe ser mayor a 0 para producto {product.name}"}
+            
+            # Determinar estrategia: FEFO o Override
+            if item.lot_id is None:
+                # FEFO automático - solo planificar
+                try:
+                    # VALIDACIÓN BLOQUE D: Aplicar vida útil mínima del cliente
+                    min_shelf_life_days = customer.min_shelf_life_days if customer else 0
                     
-                    # BLOQUE E: Registrar auditoría de override
-                    LotOverrideAudit.objects.create(
-                        actor=user,
-                        sale_id=sale_id,
+                    allocation_plan = allocate_lots_fefo(
                         product=product,
-                        lot_chosen=lot,
-                        qty=allocation.qty_allocated,
-                        reason=item.lot_override_reason
+                        qty_needed=item.qty,
+                        min_shelf_life_days=min_shelf_life_days
                     )
-                else:
-                    reason = "pos_sale_fefo"
+                    allocation_plans.append({
+                        'item': item,
+                        'product': product,
+                        'plan': allocation_plan,
+                        'type': 'fefo'
+                    })
+                except StockError as e:
+                    if e.code == "INSUFFICIENT_STOCK":
+                        return 400, {"error": "INSUFFICIENT_STOCK", "detail": f"Stock insuficiente para producto {product.name}: {str(e)}"}
+                    elif e.code == "INSUFFICIENT_SHELF_LIFE":
+                        return 400, {"error": "INSUFFICIENT_SHELF_LIFE", "detail": f"Vida útil insuficiente para producto {product.name}: {str(e)}"}
+                    else:
+                        return 400, {"error": e.code, "detail": str(e)}
+            else:
+                # Override de lote específico
+                if not item.lot_override_reason:
+                    return 400, {"error": "VALIDATION_ERROR", "detail": "lot_override_reason es requerido cuando se especifica lot_id"}
                 
-                # Crear movimiento
-                movement = Movement.objects.create(
-                    type=Movement.Type.EXIT,
-                    product=product,
-                    lot=lot,
-                    qty=allocation.qty_allocated,
-                    unit_cost=lot.unit_cost,
-                    reason=reason,
-                    created_by=user
-                )
-                all_movements.append(movement)
+                # Validar que el lote existe y está disponible
+                try:
+                    lot = StockLot.objects.get(
+                        id=item.lot_id,
+                        product_id=item.product_id,
+                        qty_on_hand__gt=0
+                    )
+                except StockLot.DoesNotExist:
+                    return 400, {"error": "INVALID_LOT", "detail": f"Lote {item.lot_id} no encontrado"}
                 
-                # BLOQUE G: Crear registro de trazabilidad
-                from .models import SaleItemLot
-                SaleItemLot.objects.create(
-                    sale_id=sale_id,
-                    item_sequence=item.sequence,
-                    product=product,
-                    lot=lot,
-                    qty_consumed=allocation.qty_allocated,
-                    unit_price=item.unit_price,
-                    movement=movement
-                )
+                # VALIDACIÓN BLOQUE D: Verificar flags de bloqueo
+                if lot.is_quarantined:
+                    return 400, {"error": "LOT_BLOCKED", "detail": f"Lote {lot.lot_code} está en cuarentena"}
+                
+                if lot.is_reserved:
+                    return 400, {"error": "LOT_BLOCKED", "detail": f"Lote {lot.lot_code} está reservado"}
+                
+                # VALIDACIÓN BLOQUE D: Verificar permisos para override
+                if not has_scope(user, 'pos_override'):
+                    return 403, {"error": "PERMISSION_DENIED", "detail": "No tienes permisos para hacer override de lotes"}
+                
+                # VALIDACIÓN BLOQUE D: Verificar PIN si se proporciona
+                if sale_data.override_pin:
+                    # Por simplicidad, usamos un PIN fijo. En producción sería más sofisticado
+                    if sale_data.override_pin != "1234":
+                        return 403, {"error": "INVALID_PIN", "detail": "PIN de override inválido"}
+                
+                # Usar allocate_lots_fefo con override - solo planificar
+                try:
+                    # VALIDACIÓN BLOQUE D: Verificar vida útil mínima también en override
+                    min_shelf_life_days = customer.min_shelf_life_days if customer else 0
+                    
+                    # Si hay requisito de vida útil mínima, verificar el lote específico
+                    if min_shelf_life_days > 0 and lot.expiry_date:
+                        from datetime import datetime, timedelta
+                        min_expiry_date = datetime.now().date() + timedelta(days=min_shelf_life_days)
+                        if lot.expiry_date < min_expiry_date:
+                            return 400, {"error": "INSUFFICIENT_SHELF_LIFE", "detail": f"Lote {lot.lot_code} no cumple vida útil mínima de {min_shelf_life_days} días"}
+                    
+                    allocation_plan = allocate_lots_fefo(
+                        product=product,
+                        qty_needed=item.qty,
+                        chosen_lot_id=item.lot_id,
+                        min_shelf_life_days=min_shelf_life_days
+                    )
+                    allocation_plans.append({
+                        'item': item,
+                        'product': product,
+                        'plan': allocation_plan,
+                        'type': 'override'
+                    })
+                except StockError as e:
+                    if e.code == "INSUFFICIENT_STOCK":
+                        return 400, {"error": "INSUFFICIENT_STOCK", "detail": f"Stock insuficiente para producto {product.name}: {str(e)}"}
+                    else:
+                        return 400, {"error": e.code, "detail": str(e)}
+        
+        # FASE 2: Verificar disponibilidad de stock para todos los planes
+        for plan_data in allocation_plans:
+            for allocation in plan_data['plan']:
+                lot = StockLot.objects.select_for_update().get(id=allocation.lot_id)
+                if lot.qty_on_hand < allocation.qty_allocated:
+                    return 400, {"error": "INSUFFICIENT_STOCK", "detail": f"Stock insuficiente en lote {lot.lot_code}"}
+        
+        # FASE 3: Ejecutar todos los cambios (solo si todo está validado)
+        all_movements = []
+        
+        try:
+            for plan_data in allocation_plans:
+                item = plan_data['item']
+                product = plan_data['product']
+                allocation_plan = plan_data['plan']
+                plan_type = plan_data['type']
+                
+                # Ejecutar el plan de asignación
+                for allocation in allocation_plan:
+                    lot = StockLot.objects.select_for_update().get(id=allocation.lot_id)
+                    
+                    # Reducir stock del lote
+                    lot.qty_on_hand -= allocation.qty_allocated
+                    lot.save(update_fields=["qty_on_hand"])
+                    
+                    # Determinar razón del movimiento
+                    if plan_type == 'override' and allocation.lot_id == item.lot_id:
+                        reason = f"pos_sale_override: {item.lot_override_reason}"
+                        
+                        # BLOQUE E: Registrar auditoría de override
+                        LotOverrideAudit.objects.create(
+                            actor=user,
+                            sale_id=sale_id,
+                            product=product,
+                            lot_chosen=lot,
+                            qty=allocation.qty_allocated,
+                            reason=item.lot_override_reason
+                        )
+                    else:
+                        reason = "pos_sale_fefo"
+                    
+                    # Crear movimiento
+                    movement = Movement.objects.create(
+                        type=Movement.Type.EXIT,
+                        product=product,
+                        lot=lot,
+                        qty=allocation.qty_allocated,
+                        unit_cost=lot.unit_cost,
+                        reason=reason,
+                        created_by=user
+                    )
+                    all_movements.append(movement)
+                    
+                    # BLOQUE G: Crear registro de trazabilidad
+                    from .models import SaleItemLot
+                    SaleItemLot.objects.create(
+                        sale_id=sale_id,
+                        item_sequence=item.sequence,
+                        product=product,
+                        lot=lot,
+                        qty_consumed=allocation.qty_allocated,
+                        unit_price=item.unit_price,
+                        movement=movement
+                    )
+        
+        except Exception as e:
+            # En caso de error inesperado, la transacción se revierte automáticamente
+            # Actualizar registro de idempotencia con error si existe
+            if idempotency_record:
+                try:
+                    idempotency_record.status = SaleIdempotencyKey.Status.FAILED
+                    idempotency_record.error_message = str(e)
+                    idempotency_record.save()
+                except:
+                    pass  # No fallar si no se puede actualizar el registro
+            
+            return 400, {"error": "INTERNAL_ERROR", "detail": f"Error interno: {str(e)}"}
+        
+        # Preparar respuesta
+        movements_out = []
+        for movement in all_movements:
+            movements_out.append(SaleMovementOut(
+                product_id=movement.product.id,
+                product_name=movement.product.name,
+                lot_id=movement.lot.id,
+                lot_code=movement.lot.lot_code,
+                qty=movement.qty,
+                unit_cost=movement.unit_cost
+            ))
+        
+        response_data = SaleOut(
+            sale_id=sale_id,
+            total_items=len(sale_data.items),
+            movements=movements_out
+        )
+        
+        # Actualizar registro de idempotencia con éxito si existe
+        if idempotency_record:
+            try:
+                idempotency_record.status = SaleIdempotencyKey.Status.COMPLETED
+                idempotency_record.sale_id = sale_id
+                # CORREGIDO: Guardar la respuesta completa en el formato correcto
+                idempotency_record.response_data = {
+                    "sale_id": sale_id,
+                    "total_items": len(sale_data.items),
+                    "movements": [
+                        {
+                            "product_id": mov.product_id,
+                            "product_name": mov.product_name,
+                            "lot_id": mov.lot_id,
+                            "lot_code": mov.lot_code,
+                            "qty": str(mov.qty),  # Convertir a string para JSON
+                            "unit_cost": str(mov.unit_cost)
+                        }
+                        for mov in movements_out
+                    ]
+                }
+                idempotency_record.save()
+            except:
+                pass  # No fallar si no se puede actualizar el registro
+        
+        return 200, response_data
     
     except Exception as e:
         # En caso de error inesperado, la transacción se revierte automáticamente
+        # Actualizar registro de idempotencia con error si existe
+        if idempotency_record:
+            try:
+                idempotency_record.status = SaleIdempotencyKey.Status.FAILED
+                idempotency_record.error_message = str(e)
+                idempotency_record.save()
+            except:
+                pass  # No fallar si no se puede actualizar el registro
+        
         return 400, {"error": "INTERNAL_ERROR", "detail": f"Error interno: {str(e)}"}
-    
-    # Preparar respuesta
-    movements_out = []
-    for movement in all_movements:
-        movements_out.append(SaleMovementOut(
-            product_id=movement.product.id,
-            product_name=movement.product.name,
-            lot_id=movement.lot.id,
-            lot_code=movement.lot.lot_code,
-            qty=movement.qty,
-            unit_cost=movement.unit_cost
-        ))
-    
-    return 200, SaleOut(
-        sale_id=sale_id,
-        total_items=len(sale_data.items),
-        movements=movements_out
-    )
 
 
 # ============================================================================

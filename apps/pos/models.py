@@ -1,6 +1,10 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 from decimal import Decimal
+from datetime import timedelta
+import hashlib
+import json
 
 
 class LotOverrideAudit(models.Model):
@@ -82,3 +86,77 @@ class SaleItemLot(models.Model):
 
     def __str__(self):
         return f"Sale {self.sale_id[:8]} - Item {self.item_sequence} - {self.lot.lot_code}"
+
+
+class SaleIdempotencyKey(models.Model):
+    """
+    Modelo para manejar idempotencia en ventas POS.
+    Evita duplicados usando Idempotency-Key en headers HTTP.
+    """
+    
+    class Status(models.TextChoices):
+        PROCESSING = "processing", "Processing"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+    
+    # Clave de idempotencia proporcionada por el cliente
+    idempotency_key = models.CharField(max_length=255, db_index=True)
+    
+    # Usuario que realizó la operación
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    
+    # ID de la venta generada (si se completó exitosamente)
+    sale_id = models.CharField(max_length=36, null=True, blank=True)
+    
+    # Hash del request para verificar consistencia
+    request_hash = models.CharField(max_length=64)
+    
+    # Estado de la operación
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PROCESSING
+    )
+    
+    # Respuesta guardada para devolver en requests duplicados
+    response_data = models.JSONField(null=True, blank=True)
+    
+    # Mensaje de error si falló
+    error_message = models.TextField(null=True, blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    expires_at = models.DateTimeField()
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['idempotency_key', 'user'], name='pos_saleide_idempot_8ff7eb_idx'),
+            models.Index(fields=['expires_at'], name='pos_saleide_expires_36b674_idx'),
+            models.Index(fields=['created_at'], name='pos_saleide_created_644996_idx'),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=('idempotency_key', 'user'),
+                name='unique_idempotency_per_user'
+            )
+        ]
+    
+    @classmethod
+    def create_hash(cls, request_data):
+        """Crea un hash del request para verificar consistencia."""
+        # Convertir a JSON ordenado para hash consistente
+        json_str = json.dumps(request_data, sort_keys=True, default=str)
+        return hashlib.sha256(json_str.encode()).hexdigest()
+    
+    @classmethod
+    def get_expiry_time(cls):
+        """Calcula tiempo de expiración (24 horas desde ahora)."""
+        return timezone.now() + timedelta(hours=24)
+    
+    def is_expired(self):
+        """Verifica si la clave de idempotencia ha expirado."""
+        return timezone.now() > self.expires_at
+    
+    def __str__(self):
+        return f"Idempotency {self.idempotency_key[:8]} - {self.user.username} - {self.status}"

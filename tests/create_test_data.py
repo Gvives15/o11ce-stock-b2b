@@ -9,6 +9,9 @@ import django
 from decimal import Decimal
 from datetime import date, timedelta
 
+# Agregar el directorio padre al PYTHONPATH
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Configurar Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
@@ -69,7 +72,7 @@ def create_test_data():
     # Crear almacén
     warehouse, created = Warehouse.objects.get_or_create(
         name='Almacén Principal',
-        defaults={'location': 'Sede Central'}
+        defaults={'is_active': True}
     )
     if created:
         print(f"✓ Almacén creado")
