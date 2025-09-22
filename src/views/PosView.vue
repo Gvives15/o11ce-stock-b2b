@@ -1,114 +1,160 @@
 <template>
-  <div class="bg-white rounded-lg shadow p-6">
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Punto de Venta</h1>
-      <div class="flex items-center space-x-2">
-        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          Activo
-        </span>
-      </div>
+  <div class="flex flex-col h-full">
+    <!-- Search Bar -->
+    <div class="bg-white border-b border-gray-200 p-4">
+      <SearchBar @add-item="handleAddItem" />
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <!-- Product Selection Area -->
-      <div class="lg:col-span-2">
-        <h2 class="text-lg font-medium text-gray-900 mb-4">Productos</h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <div
-            v-for="product in mockProducts"
-            :key="product.id"
-            class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors"
-            :class="{ 'opacity-50 cursor-not-allowed': !canOperate }"
-            @click="canOperate ? addToCart(product) : null"
-          >
-            <div class="text-sm font-medium text-gray-900">{{ product.name }}</div>
-            <div class="text-lg font-bold text-blue-600">${{ product.price }}</div>
-            <div class="text-xs text-gray-500">Stock: {{ product.stock }}</div>
+    <!-- Main POS Interface -->
+    <div class="flex-1 flex overflow-hidden">
+      <!-- Product Grid/Categories (Left Side) -->
+      <div class="flex-1 p-6 overflow-y-auto">
+        <div class="mb-6">
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">Categorías de Productos</h2>
+          
+          <!-- Category Grid -->
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+            <button
+              v-for="category in categories"
+              :key="category.id"
+              @click="selectCategory(category)"
+              class="p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors text-center"
+              :class="{
+                'border-blue-500 bg-blue-50': selectedCategory?.id === category.id
+              }"
+            >
+              <div class="text-2xl mb-2">{{ category.icon }}</div>
+              <div class="text-sm font-medium text-gray-900">{{ category.name }}</div>
+              <div class="text-xs text-gray-500">{{ category.count }} productos</div>
+            </button>
+          </div>
+
+          <!-- Products in Selected Category -->
+          <div v-if="selectedCategory" class="space-y-4">
+            <h3 class="text-lg font-medium text-gray-900">{{ selectedCategory.name }}</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <button
+                v-for="product in categoryProducts"
+                :key="product.id"
+                @click="addToCart(product)"
+                class="p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-md transition-all text-left"
+              >
+                <div class="flex items-center justify-between mb-2">
+                  <h4 class="font-medium text-gray-900 truncate">{{ product.name }}</h4>
+                  <span class="text-lg font-bold text-blue-600">${{ product.price.toFixed(2) }}</span>
+                </div>
+                <div class="text-sm text-gray-500">
+                  Stock: {{ product.stock }} {{ product.unit }}
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Cart Area -->
-      <div class="bg-gray-50 rounded-lg p-4">
-        <h2 class="text-lg font-medium text-gray-900 mb-4">Carrito</h2>
-        
-        <div v-if="cart.length === 0" class="text-gray-500 text-center py-8">
-          Carrito vacío
+      <!-- Shopping Cart (Right Side) -->
+      <div class="w-96 bg-gray-50 border-l border-gray-200 flex flex-col">
+        <!-- Cart Header -->
+        <div class="p-4 bg-white border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-900">Carrito de Compras</h2>
+          <p class="text-sm text-gray-500">{{ cart.length }} {{ cart.length === 1 ? 'artículo' : 'artículos' }}</p>
         </div>
-        
-        <div v-else class="space-y-2">
+
+        <!-- Cart Items -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-3">
           <div
             v-for="item in cart"
             :key="item.id"
-            class="flex items-center justify-between py-2 border-b border-gray-200"
+            class="bg-white p-3 rounded-lg border border-gray-200"
           >
-            <div class="flex-1">
-              <div class="text-sm font-medium">{{ item.name }}</div>
-              <div class="text-xs text-gray-500">{{ item.quantity }} x ${{ item.price }}</div>
-            </div>
-            <div class="text-sm font-bold">${{ (item.quantity * item.price).toFixed(2) }}</div>
-          </div>
-          
-          <div class="pt-4 border-t border-gray-300">
-            <div class="flex justify-between items-center text-lg font-bold">
-              <span>Total:</span>
-              <span>${{ cartTotal.toFixed(2) }}</span>
-            </div>
-            
-            <!-- Checkout Button with Blocker -->
-            <div class="mt-4">
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="font-medium text-gray-900 text-sm">{{ item.name }}</h4>
               <button
-                @click="canCheckout ? processPayment() : null"
-                :disabled="!canCheckout"
-                :title="checkoutBlockReason || ''"
-                class="w-full bg-blue-600 text-white py-2 px-4 rounded-md transition-colors"
-                :class="getBlockedButtonClass(!canCheckout)"
+                @click="removeFromCart(item.id)"
+                class="text-red-500 hover:text-red-700 text-sm"
               >
-                {{ canCheckout ? 'Procesar Pago' : `Bloqueado: ${checkoutBlockReason}` }}
+                ✕
               </button>
             </div>
             
-            <button
-              @click="clearCart"
-              :disabled="!canOperate"
-              class="w-full mt-2 bg-gray-300 text-gray-700 py-2 px-4 rounded-md transition-colors"
-              :class="getBlockedButtonClass(!canOperate)"
-            >
-              Limpiar Carrito
-            </button>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <button
+                  @click="updateQuantity(item.id, item.quantity - 1)"
+                  class="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-sm"
+                  :disabled="item.quantity <= 1"
+                >
+                  −
+                </button>
+                <span class="w-8 text-center text-sm font-medium">{{ item.quantity }}</span>
+                <button
+                  @click="updateQuantity(item.id, item.quantity + 1)"
+                  class="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-sm"
+                >
+                  +
+                </button>
+              </div>
+              
+              <div class="text-right">
+                <div class="text-sm font-semibold text-gray-900">
+                  ${{ (item.price * item.quantity).toFixed(2) }}
+                </div>
+                <div class="text-xs text-gray-500">
+                  ${{ item.price.toFixed(2) }} / {{ item.unit }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty Cart Message -->
+          <div v-if="cart.length === 0" class="text-center py-8">
+            <div class="text-gray-400 text-4xl mb-2">🛒</div>
+            <p class="text-gray-500 text-sm">El carrito está vacío</p>
+            <p class="text-gray-400 text-xs mt-1">Busca productos o selecciona una categoría</p>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Debug Panel (for testing) -->
-    <div class="mt-8 p-4 bg-gray-100 rounded-lg">
-      <h3 class="text-sm font-medium text-gray-900 mb-2">Panel de Pruebas</h3>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <button
-          @click="opsStore.setOffline(!opsStore.offline)"
-          class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded hover:bg-red-200"
-        >
-          {{ opsStore.offline ? 'Conectar' : 'Desconectar' }}
-        </button>
-        <button
-          @click="opsStore.setShift(!opsStore.hasShiftOpen)"
-          class="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded hover:bg-amber-200"
-        >
-          {{ opsStore.hasShiftOpen ? 'Cerrar Turno' : 'Abrir Turno' }}
-        </button>
-        <button
-          @click="opsStore.setCashbox(!opsStore.hasCashboxOpen)"
-          class="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded hover:bg-amber-200"
-        >
-          {{ opsStore.hasCashboxOpen ? 'Cerrar Caja' : 'Abrir Caja' }}
-        </button>
-        <button
-          @click="resetOperationalState"
-          class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200"
-        >
-          Reset Todo
-        </button>
+        <!-- Cart Summary -->
+        <div v-if="cart.length > 0" class="p-4 bg-white border-t border-gray-200">
+          <!-- Subtotal -->
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-sm text-gray-600">Subtotal:</span>
+            <span class="text-sm font-medium">${{ subtotal.toFixed(2) }}</span>
+          </div>
+          
+          <!-- Tax -->
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-sm text-gray-600">IVA (21%):</span>
+            <span class="text-sm font-medium">${{ tax.toFixed(2) }}</span>
+          </div>
+          
+          <!-- Total -->
+          <div class="flex justify-between items-center mb-4 pt-2 border-t border-gray-200">
+            <span class="text-lg font-semibold text-gray-900">Total:</span>
+            <span class="text-lg font-bold text-blue-600">${{ total.toFixed(2) }}</span>
+          </div>
+
+          <!-- Checkout Button -->
+          <button
+            @click="processPayment"
+            :disabled="!canCheckout"
+            :title="checkoutBlockReason || ''"
+            class="w-full py-3 px-4 rounded-lg font-medium transition-colors"
+            :class="canCheckout 
+              ? 'bg-blue-600 text-white hover:bg-blue-700' 
+              : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-50'"
+          >
+            {{ canCheckout ? 'Procesar Pago' : (checkoutBlockReason || 'No Disponible') }}
+          </button>
+
+          <!-- Clear Cart -->
+          <button
+            @click="clearCart"
+            class="w-full mt-2 py-2 px-4 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+          >
+            Limpiar Carrito
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -116,45 +162,124 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useOpsStore } from '@/stores/ops'
 import { useBlockers } from '@/composables/useBlockers'
+import SearchBar from '@/components/SearchBar.vue'
 
 interface Product {
-  id: number
+  id: string
   name: string
   price: number
+  category: string
   stock: number
+  unit: string
+  barcode?: string
 }
 
 interface CartItem extends Product {
   quantity: number
 }
 
-const opsStore = useOpsStore()
-const { canCheckout, checkoutBlockReason, canOperate, getBlockedButtonClass } = useBlockers()
+interface Category {
+  id: string
+  name: string
+  icon: string
+  count: number
+}
 
-const mockProducts: Product[] = [
-  { id: 1, name: 'Coca Cola 500ml', price: 2.50, stock: 50 },
-  { id: 2, name: 'Pan Integral', price: 3.00, stock: 25 },
-  { id: 3, name: 'Leche Entera 1L', price: 4.20, stock: 30 },
-  { id: 4, name: 'Café Molido 250g', price: 8.50, stock: 15 },
-  { id: 5, name: 'Galletas Chocolate', price: 2.80, stock: 40 },
-  { id: 6, name: 'Yogur Natural', price: 1.90, stock: 35 }
+interface AddItemEvent {
+  product: Product
+  unit: string
+}
+
+// Composables
+const { canCheckout, checkoutBlockReason } = useBlockers()
+
+// Reactive state
+const cart = ref<CartItem[]>([])
+const selectedCategory = ref<Category | null>(null)
+
+// Mock data
+const categories: Category[] = [
+  { id: 'fuel', name: 'Combustibles', icon: '⛽', count: 5 },
+  { id: 'lubricants', name: 'Lubricantes', icon: '🛢️', count: 8 },
+  { id: 'beverages', name: 'Bebidas', icon: '🥤', count: 12 },
+  { id: 'snacks', name: 'Snacks', icon: '🍿', count: 15 },
+  { id: 'automotive', name: 'Automotriz', icon: '🔧', count: 6 },
+  { id: 'services', name: 'Servicios', icon: '🔧', count: 3 }
 ]
 
-const cart = ref<CartItem[]>([])
+const mockProducts: Record<string, Product[]> = {
+  fuel: [
+    { id: '1', name: 'Gasolina Premium 95', price: 1.45, category: 'Combustibles', stock: 1000, unit: 'litro' },
+    { id: '2', name: 'Gasolina Regular 87', price: 1.35, category: 'Combustibles', stock: 1500, unit: 'litro' },
+    { id: '3', name: 'Gasóleo Diesel', price: 1.25, category: 'Combustibles', stock: 800, unit: 'litro' }
+  ],
+  lubricants: [
+    { id: '4', name: 'Aceite Motor 5W-30', price: 25.99, category: 'Lubricantes', stock: 50, unit: 'botella' },
+    { id: '5', name: 'Aceite Motor 10W-40', price: 22.99, category: 'Lubricantes', stock: 45, unit: 'botella' }
+  ],
+  beverages: [
+    { id: '6', name: 'Coca Cola 500ml', price: 2.50, category: 'Bebidas', stock: 120, unit: 'unidad' },
+    { id: '7', name: 'Agua Mineral 1L', price: 1.25, category: 'Bebidas', stock: 200, unit: 'unidad' }
+  ]
+}
 
-const cartTotal = computed(() => {
-  return cart.value.reduce((total, item) => total + (item.quantity * item.price), 0)
+// Computed
+const categoryProducts = computed(() => {
+  if (!selectedCategory.value) return []
+  return mockProducts[selectedCategory.value.id] || []
 })
 
-const addToCart = (product: Product) => {
+const subtotal = computed(() => {
+  return cart.value.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+})
+
+const tax = computed(() => {
+  return subtotal.value * 0.21 // 21% IVA
+})
+
+const total = computed(() => {
+  return subtotal.value + tax.value
+})
+
+// Methods
+const selectCategory = (category: Category) => {
+  selectedCategory.value = selectedCategory.value?.id === category.id ? null : category
+}
+
+const handleAddItem = (event: AddItemEvent) => {
+  addToCart(event.product, 1)
+}
+
+const addToCart = (product: Product, quantity: number = 1) => {
   const existingItem = cart.value.find(item => item.id === product.id)
   
   if (existingItem) {
-    existingItem.quantity++
+    existingItem.quantity += quantity
   } else {
-    cart.value.push({ ...product, quantity: 1 })
+    cart.value.push({
+      ...product,
+      quantity
+    })
+  }
+}
+
+const removeFromCart = (productId: string) => {
+  const index = cart.value.findIndex(item => item.id === productId)
+  if (index > -1) {
+    cart.value.splice(index, 1)
+  }
+}
+
+const updateQuantity = (productId: string, newQuantity: number) => {
+  if (newQuantity <= 0) {
+    removeFromCart(productId)
+    return
+  }
+  
+  const item = cart.value.find(item => item.id === productId)
+  if (item) {
+    item.quantity = newQuantity
   }
 }
 
@@ -163,16 +288,15 @@ const clearCart = () => {
 }
 
 const processPayment = () => {
-  if (cart.value.length === 0) return
+  if (!canCheckout.value) return
   
   // Mock payment processing
-  alert(`Pago procesado por $${cartTotal.value.toFixed(2)}`)
-  clearCart()
-}
-
-const resetOperationalState = () => {
-  opsStore.setOffline(false)
-  opsStore.setShift(true)
-  opsStore.setCashbox(true)
+  alert(`Procesando pago de $${total.value.toFixed(2)}...`)
+  
+  // Clear cart after successful payment
+  setTimeout(() => {
+    clearCart()
+    alert('¡Pago procesado exitosamente!')
+  }, 1000)
 }
 </script>
