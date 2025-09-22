@@ -1,5 +1,5 @@
 {
-  "timeline_index": 114,
+  "timeline_index": 138,
   "planner": {
     "Team Leader": {
       "1": {
@@ -15,7 +15,7 @@
         "start_at": 1758506236.151208,
         "end_at": 1758506682.7046332
       },
-      "current_task_id": "5",
+      "current_task_id": "B2-FE-T2",
       "2": {
         "task_id": "2",
         "dependent_task_ids": [],
@@ -66,7 +66,124 @@
         "is_finished": true,
         "assignee": "Alex",
         "start_at": 1758511965.5108078,
-        "end_at": 1758512392.2174084
+        "end_at": 1758513730.1254668
+      },
+      "B2-FE-T1": {
+        "task_id": "B2-FE-T1",
+        "dependent_task_ids": [],
+        "instruction": "Crear PaymentsStore (estado y validaciones) - Crear `src/stores/payments.ts` (Pinia) con: `payments:[{method:'cash'|'card'|'transfer'|'cc', amount:number}]`, acciones `addPayment(method,amount)`, `remove(i)`, `setAmount(i, n)`, getter `totalPaid`, y función `validateAgainst(total)` que devuelve `{ok:boolean, change:number, error?:string}` (ok si `totalPaid >= total`). DoD: cálculos exactos; `change = totalPaid - total`.",
+        "task_type": "general",
+        "code": "",
+        "result": "",
+        "is_success": false,
+        "is_finished": true,
+        "assignee": "Alex",
+        "start_at": 1758513730.1254704,
+        "end_at": 1758514158.9959311
+      },
+      "B2-FE-T2": {
+        "task_id": "B2-FE-T2",
+        "dependent_task_ids": [
+          "B2-FE-T1"
+        ],
+        "instruction": "Crear PaymentsPanel (UI + UX) - Crear `src/components/PaymentsPanel.vue` con select de método y campo monto; botón 'Agregar'. Lista de pagos con borrar/editar; muestra `totalPagado` y `vuelto`. Reglas: montos ≥ 0; si método `cc` solo si el cliente lo permite (prop `allowCC`). Emite evento `validityChanged({ok, change})`. DoD: split payment funcionando, vuelto correcto.",
+        "task_type": "general",
+        "code": "",
+        "result": "",
+        "is_success": false,
+        "is_finished": false,
+        "assignee": "Alex",
+        "start_at": 1758514158.9960241
+      },
+      "B2-FE-T3": {
+        "task_id": "B2-FE-T3",
+        "dependent_task_ids": [],
+        "instruction": "Crear useCheckout (cliente de API con idempotencia) - Crear `src/composables/useCheckout.ts` con función `checkout({customerId, items, payments, idempotencyKey})`. Usa `axiosClient.post('/pos/checkout', body, { headers:{'Idempotency-Key': key}})`. Maneja 201 y 409; retorna `{ok, data?, missing?, error?}`. DoD: agrega header y mapea 201/409.",
+        "task_type": "general",
+        "code": "",
+        "result": "",
+        "is_success": false,
+        "is_finished": false,
+        "assignee": "Alex"
+      },
+      "B2-FE-T4": {
+        "task_id": "B2-FE-T4",
+        "dependent_task_ids": [],
+        "instruction": "IdempotencyKey (generación y ciclo) - En `src/stores/sale.ts`, agregar `idempotencyKey:string` (uuid v4). Acción `resetKey()` al iniciar una venta y después de un checkout exitoso. PosView usa esta key en `useCheckout`. DoD: cada venta sale con key única.",
+        "task_type": "general",
+        "code": "",
+        "result": "",
+        "is_success": false,
+        "is_finished": false,
+        "assignee": "Alex"
+      },
+      "B2-FE-T5": {
+        "task_id": "B2-FE-T5",
+        "dependent_task_ids": [
+          "B2-FE-T1",
+          "B2-FE-T2",
+          "B2-FE-T3",
+          "B2-FE-T4"
+        ],
+        "instruction": "Integración Checkout en PosView - Actualizar `src/views/PosView.vue`: Obtener `total` desde `TotalsPanel` y `payments` desde `PaymentsStore`. Botón **Cobrar** habilitado si: no offline, turno/caja abiertos (useBlockers), `payments.validateAgainst(total).ok`, carrito no vacío. Al click: llamar `useCheckout` con `{customerId, items: cart.asQuoteItems(), payments, idempotencyKey}`. DoD: cobra cuando todo es válido.",
+        "task_type": "general",
+        "code": "",
+        "result": "",
+        "is_success": false,
+        "is_finished": false,
+        "assignee": "Alex"
+      },
+      "B2-FE-T6": {
+        "task_id": "B2-FE-T6",
+        "dependent_task_ids": [
+          "B2-FE-T5"
+        ],
+        "instruction": "Éxito 201 (post-checkout) - Tras 201: Mostrar modal 'Venta realizada' con `receipt.number`, `total`, `change`, CTA 'Imprimir' (`window.open(receipt.print_url)`) y 'Nueva venta'. Limpiar `cart`, `payments`, `sale.customerId?` (opcional), y `resetKey()`. DoD: limpia estado y ofrece imprimir.",
+        "task_type": "general",
+        "code": "",
+        "result": "",
+        "is_success": false,
+        "is_finished": false,
+        "assignee": "Alex"
+      },
+      "B2-FE-T7": {
+        "task_id": "B2-FE-T7",
+        "dependent_task_ids": [
+          "B2-FE-T5"
+        ],
+        "instruction": "Manejo de 409 (faltante de stock) - Si 409: Resaltar en `Cart` las líneas con `product_id` en `missing[]` (borde rojo + tooltip 'Disponibles: X'). Botón 'Ajustar automáticamente' que ponga `qty = available` para esas líneas. Recalcular `price-quote` y reintentar checkout. DoD: UX rápida para corregir faltantes.",
+        "task_type": "general",
+        "code": "",
+        "result": "",
+        "is_success": false,
+        "is_finished": false,
+        "assignee": "Alex"
+      },
+      "B2-FE-T8": {
+        "task_id": "B2-FE-T8",
+        "dependent_task_ids": [
+          "B2-FE-T5"
+        ],
+        "instruction": "Errores de red y reintentos cortos - Si error de red/5xx: mostrar toast 'No se pudo cobrar. Revisá conexión e intentá de nuevo'. Hacer un reintento automático único a los 800 ms si la app vuelve `online` (usar `ops.offline` watcher). DoD: resiliencia básica sin loop infinito.",
+        "task_type": "general",
+        "code": "",
+        "result": "",
+        "is_success": false,
+        "is_finished": false,
+        "assignee": "Alex"
+      },
+      "B2-FE-T9": {
+        "task_id": "B2-FE-T9",
+        "dependent_task_ids": [
+          "B2-FE-T2"
+        ],
+        "instruction": "Bloqueos finales (reglas) - Conectar `useBlockers` (offline/turno/caja) con `PaymentsPanel` y botón **Cobrar** (disabled + tooltip con motivo). DoD: no se puede cobrar si hay bloqueo.",
+        "task_type": "general",
+        "code": "",
+        "result": "",
+        "is_success": false,
+        "is_finished": false,
+        "assignee": "Alex"
       }
     }
   },
@@ -185,7 +302,31 @@
     "111": 1,
     "112": 1,
     "113": 1,
-    "114": 0
+    "114": 0,
+    "115": 1,
+    "116": 1,
+    "117": 1,
+    "118": 1,
+    "119": 1,
+    "120": 1,
+    "121": 1,
+    "122": 1,
+    "123": 1,
+    "124": 1,
+    "125": 1,
+    "126": 1,
+    "127": 1,
+    "128": 1,
+    "129": 1,
+    "130": 1,
+    "131": 1,
+    "132": 1,
+    "133": 1,
+    "134": 1,
+    "135": 1,
+    "136": 1,
+    "137": 1,
+    "138": 1
   },
   "preview_servers": {},
   "preview_server": null,
