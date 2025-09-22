@@ -76,13 +76,24 @@ def cache_response(timeout: int = 300, key_prefix: str = "api"):
     """
     def decorator(func):
         def wrapper(request: HttpRequest, *args, **kwargs):
-            # Generar clave de cache basada en la función, args y query params
+            # Para Django Ninja, los parámetros vienen en kwargs
+            # Incluir tanto args como kwargs en la clave de cache
+            import inspect
+            
+            # Obtener los parámetros de la función
+            sig = inspect.signature(func)
+            bound_args = sig.bind(request, *args, **kwargs)
+            bound_args.apply_defaults()
+            
+            # Crear parámetros de cache incluyendo todos los argumentos
             cache_params = {
                 'func': func.__name__,
-                'args': args,
-                'kwargs': kwargs,
-                'query': dict(request.GET.items()) if hasattr(request, 'GET') else {}
+                'args': dict(bound_args.arguments)
             }
+            
+            # Remover el request de los parámetros de cache
+            if 'request' in cache_params['args']:
+                del cache_params['args']['request']
             
             cache_key = CacheService.generate_cache_key(key_prefix, **cache_params)
             endpoint = f"{key_prefix}_{func.__name__}"

@@ -1,0 +1,59 @@
+$ pnpm run lint
+
+> pos-auth-app@0.1.0 lint /workspace
+> eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore
+
+
+/workspace/src/components/SearchBar.vue
+  109:8  error  'axiosClient' is defined but never used  @typescript-eslint/no-unused-vars
+
+/workspace/src/views/PosView.vue
+  303:1  error  Parsing error: x-invalid-end-tag  vue/no-parsing-error
+
+✖ 2 problems (2 errors, 0 warnings)
+
+ ELIFECYCLE  Command failed with exit code 1.
+$ pnpm run lint
+
+
+> pos-auth-app@0.1.0 lint /workspace
+> eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore
+
+
+/workspace/src/views/PosView.vue
+  303:1  error  Parsing error: x-invalid-end-tag  vue/no-parsing-error
+
+✖ 1 problem (1 error, 0 warnings)
+
+ ELIFECYCLE  Command failed with exit code 1.
+$ pnpm run lint
+
+
+> pos-auth-app@0.1.0 lint /workspace
+> eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore
+
+$ pnpm run build
+
+
+> pos-auth-app@0.1.0 build /workspace
+> vite build
+
+vite v5.4.20 building for production...
+transforming...
+✓ 60 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                                         0.48 kB │ gzip:  0.32 kB
+dist/assets/PosView-BiKeX63y.css                                        0.40 kB │ gzip:  0.17 kB
+dist/assets/POSLayout-LnuaBlpU.css                                      1.65 kB │ gzip:  0.53 kB
+dist/assets/index-TH1qwIDw.css                                         24.92 kB │ gzip:  4.94 kB
+dist/assets/_plugin-vue_export-helper-DlAUqK2U.js                       0.09 kB │ gzip:  0.10 kB
+dist/assets/POSLayout-Dp4gUHe4.js                                       0.18 kB │ gzip:  0.17 kB
+dist/assets/DeniedView-0lMVDJzR.js                                      2.78 kB │ gzip:  1.30 kB
+dist/assets/LoginView-CVcw7V9_.js                                       4.05 kB │ gzip:  1.70 kB
+dist/assets/POSLayout.vue_vue_type_script_setup_true_lang-Z0FJmQ3z.js   5.65 kB │ gzip:  2.51 kB
+dist/assets/HistoryView-bKmjjzbm.js                                     6.65 kB │ gzip:  2.30 kB
+dist/assets/SettingsView-CJsELXhI.js                                    8.51 kB │ gzip:  2.84 kB
+dist/assets/PosView-DZwEppLV.js                                        13.50 kB │ gzip:  4.76 kB
+dist/assets/index-DRpUKv0k.js                                          98.89 kB │ gzip: 38.79 kB
+✓ built in 2.51s

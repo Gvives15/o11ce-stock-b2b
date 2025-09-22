@@ -6,6 +6,41 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 
+class Role(models.Model):
+    """Modelo para roles de usuario específicos del sistema."""
+    
+    ROLE_CHOICES = [
+        ('admin', 'Administrador'),
+        ('vendedor_caja', 'Vendedor de Caja'),
+        ('vendedor_ruta', 'Vendedor de Ruta'),
+    ]
+    
+    name = models.CharField(
+        max_length=20, 
+        choices=ROLE_CHOICES, 
+        unique=True,
+        verbose_name="Nombre del Rol"
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name="Descripción"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Activo"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Rol"
+        verbose_name_plural = "Roles"
+        ordering = ['name']
+    
+    def __str__(self):
+        return self.get_name_display()
+
+
 class UserScope(models.Model):
     """Scopes/permisos específicos por usuario."""
     
@@ -13,6 +48,14 @@ class UserScope(models.Model):
         User, 
         on_delete=models.CASCADE, 
         related_name='scope'
+    )
+    
+    # Relación con roles específicos
+    roles = models.ManyToManyField(
+        Role,
+        blank=True,
+        related_name='users',
+        verbose_name="Roles del Usuario"
     )
     
     # Scopes disponibles

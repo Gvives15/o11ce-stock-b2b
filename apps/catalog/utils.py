@@ -2,7 +2,7 @@
 
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import date
-from typing import Optional
+from typing import Optional, Union
 from django.db.models import Q, QuerySet
 from .models import Benefit
 
@@ -55,3 +55,35 @@ def get_active_benefits(segment: Optional[str] = None, filter_date: Optional[dat
         qs = qs.filter(segment=segment)
     
     return qs.order_by('name')
+
+
+def normalize_qty(product, qty: Union[int, float, Decimal], unit: str) -> Decimal:
+    """
+    Normaliza la cantidad a unidades base según el tipo de unidad especificado.
+    
+    Args:
+        product: Instancia del producto
+        qty: Cantidad a normalizar
+        unit: Tipo de unidad ('unit' o 'package')
+        
+    Returns:
+        Cantidad normalizada en unidades base
+        
+    Examples:
+        >>> from apps.catalog.models import Product
+        >>> product = Product(pack_size=10)
+        >>> normalize_qty(product, 1, 'package')  # 1 paquete = 10 unidades
+        Decimal('10')
+        >>> normalize_qty(product, 5, 'unit')     # 5 unidades = 5 unidades
+        Decimal('5')
+    """
+    qty = Decimal(str(qty))
+    
+    if unit == 'package':
+        if product.pack_size is None:
+            raise ValueError(f"Product {product.code} does not have pack_size defined")
+        return qty * Decimal(str(product.pack_size))
+    elif unit == 'unit':
+        return qty
+    else:
+        raise ValueError(f"Invalid unit type: {unit}. Must be 'unit' or 'package'")

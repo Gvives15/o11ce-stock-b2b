@@ -12,7 +12,9 @@ except ImportError:
 
 class Product(TimeStampedModel):
     class Unit(models.TextChoices):
-        UNIT = "UN", "Unidad"
+        UNIT = "unit", "Unidad"
+        PACKAGE = "package", "Paquete"
+        # Legacy choices for backward compatibility
         KILOGRAM = "KG", "Kilogramo"
         LITER = "LT", "Litro"
 
@@ -24,6 +26,7 @@ class Product(TimeStampedModel):
     price = models.DecimalField(max_digits=12, decimal_places=2)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=21)  # %
     low_stock_threshold = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    pack_size = models.IntegerField(null=True, blank=True, help_text="Número de unidades por paquete")
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -35,6 +38,10 @@ class Product(TimeStampedModel):
             models.CheckConstraint(
                 check=Q(tax_rate__gte=0) & Q(tax_rate__lte=100), 
                 name="ck_product_tax_rate_valid"
+            ),
+            models.CheckConstraint(
+                check=Q(pack_size__isnull=True) | Q(pack_size__gt=0),
+                name="ck_product_pack_size_positive"
             ),
         ]
         indexes = [

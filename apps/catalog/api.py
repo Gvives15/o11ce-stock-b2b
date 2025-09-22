@@ -14,10 +14,30 @@ from apps.catalog.models import Product, Benefit
 from apps.catalog.utils import get_active_benefits
 from apps.core.cache_service import CacheService, cache_response
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
 router = Router()
+
+
+def extract_pack_size(product_name: str) -> Optional[str]:
+    """
+    Extract pack size from product name.
+    
+    Examples:
+    - "Galletas Caja x10 unidades" -> "10"
+    - "Galletitas Dulces Pack x6" -> "6"
+    - "Gaseosa 500ml" -> None
+    """
+    # Pattern to match "x" followed by digits
+    pattern = r'x(\d+)'
+    match = re.search(pattern, product_name, re.IGNORECASE)
+    
+    if match:
+        return match.group(1)
+    
+    return None
 
 # Schemas
 class ProductIn(Schema):
@@ -57,6 +77,19 @@ class BenefitOut(Schema):
 class ErrorOut(Schema):
     error: str
     message: str
+
+# Search specific schemas
+class ProductSearchResult(Schema):
+    id: int
+    sku: str  # This will be the 'code' field
+    name: str
+    unit: str
+    pack_size: Optional[str] = None  # For future pack size support
+    price_base: Decimal
+
+class SearchResponse(Schema):
+    results: List[ProductSearchResult]
+    next: Optional[str] = None
 
 # Endpoints
 @router.post("/products", response={201: ProductOut, 409: ErrorOut, 400: ErrorOut})
@@ -157,6 +190,74 @@ def update_product(request, product_id: int, payload: ProductIn):
         return ProductOut.from_orm(p)
     except Product.DoesNotExist:
         return 404, {"error": "NOT_FOUND", "message": "producto no encontrado"}
+
+@router.get("/search", response=SearchResponse)
+def search_products(request, 
+                   q: Optional[str] = None, 
+                   page: int = 1, 
+                   size: int = 20):
+    """
+    Search products by name or SKU with pagination.
+    
+    Args:
+        q: Search query (searches in name and code/sku fields)
+        page: Page number (1-based)
+        size: Number of items per page
+        
+    Returns:
+        SearchResponse with results and next page URL
+    """
+    request_id = getattr(request, 'META', {}).get('HTTP_X_REQUEST_ID', 'unknown')
+    
+    # Log de acceso con métricas
+    logger.info(f"API_ACCESS /search - Request ID: {request_id}, Query: {q}, Page: {page}, Size: {size}")
+    logger.info(f"METRIC search_endpoint_hit 1 request_id={request_id}")
+    
+    # Base queryset - only active products
+    qs = Product.objects.filter(is_active=True)
+    
+    # Apply search filter if query provided
+    if q:
+        qs = qs.filter(Q(code__icontains=q) | Q(name__icontains=q))
+    
+    # Order by name for consistent pagination
+    qs = qs.order_by('name')
+    
+    # Calculate pagination
+    total_count = qs.count()
+    start_index = (page - 1) * size
+    end_index = start_index + size
+    
+    # Get results for current page
+    products = qs[start_index:end_index]
+    
+    # Build results
+    results = []
+    for product in products:
+        # Extract pack_size from product name
+        pack_size = extract_pack_size(product.name)
+        
+        results.append(ProductSearchResult(
+            id=product.id,
+            sku=product.code,
+            name=product.name,
+            unit=product.unit,
+            pack_size=pack_size,
+            price_base=product.price
+        ))
+    
+    # Calculate next page URL
+    next_url = None
+    if end_index < total_count:
+        next_url = f"/api/v1/catalog/search?q={q or ''}&page={page + 1}&size={size}"
+    
+    # Log de respuesta con métricas
+    logger.info(f"API_RESPONSE /search - Request ID: {request_id}, Results: {len(results)}, Total: {total_count}")
+    
+    return SearchResponse(
+        results=results,
+        next=next_url
+    )
 
 @router.get("/ping")
 def ping(request) -> dict:

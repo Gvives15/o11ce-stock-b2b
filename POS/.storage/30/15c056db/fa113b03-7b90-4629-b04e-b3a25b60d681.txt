@@ -1,0 +1,114 @@
+$ pnpm install
+Progress: resolved 1, reused 0, downloaded 0, added 0
+ WARN  deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+Progress: resolved 15, reused 2, downloaded 12, added 0
+Progress: resolved 91, reused 52, downloaded 36, added 0
+Progress: resolved 267, reused 160, downloaded 96, added 0
+Progress: resolved 362, reused 197, downloaded 121, added 0
+Progress: resolved 371, reused 199, downloaded 128, added 0
+ WARN  5 deprecated subdependencies found: @humanwhocodes/config-array@0.13.0, @humanwhocodes/object-schema@2.0.3, glob@7.2.3, inflight@1.0.6, rimraf@3.0.2
+Progress: resolved 378, reused 199, downloaded 136, added 0
+Packages: +335
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 378, reused 199, downloaded 136, added 335, done
+
+dependencies:
++ axios 1.12.2
++ nprogress 0.2.0
++ pinia 2.3.1 (3.0.3 is available)
++ vue 3.5.21
++ vue-router 4.5.1
+
+devDependencies:
++ @types/node 20.19.17 (24.5.2 is available)
++ @types/nprogress 0.2.3
++ @vitejs/plugin-vue 4.6.2 (6.0.1 is available)
++ @vue/eslint-config-typescript 12.0.0 (14.6.0 is available)
++ autoprefixer 10.4.21
++ eslint 8.57.1 (9.36.0 is available) deprecated
++ eslint-plugin-vue 9.33.0 (10.4.0 is available)
++ postcss 8.5.6
++ tailwindcss 3.4.17 (4.1.13 is available)
++ typescript 5.9.2
++ vite 5.4.20 (7.1.6 is available)
++ vitest 1.6.1 (3.2.4 is available)
++ vue-tsc 1.8.27 (3.0.7 is available)
+
+╭ Warning ─────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│   Ignored build scripts: esbuild, vue-demi.                                  │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+│   to run scripts.                                                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+Done in 8.4s using pnpm v10.17.0
+$ pnpm run lint
+
+
+> pos-auth-app@0.1.0 lint /workspace
+> eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore
+
+
+/workspace/postcss.config.js
+  1:1  error  Parsing error: The keyword 'export' is reserved
+
+/workspace/src/App.vue
+  1:1  error  Parsing error: Unexpected token <
+
+/workspace/src/layouts/POSLayout.vue
+  1:1  error  Parsing error: Unexpected token <
+
+/workspace/src/lib/axiosClient.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+/workspace/src/main.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+/workspace/src/router/index.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+/workspace/src/stores/auth.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+/workspace/src/views/DeniedView.vue
+  1:1  error  Parsing error: Unexpected token <
+
+/workspace/src/views/HistoryView.vue
+  1:1  error  Parsing error: Unexpected token <
+
+/workspace/src/views/LoginView.vue
+  1:1  error  Parsing error: Unexpected token <
+
+/workspace/src/views/PosView.vue
+  1:1  error  Parsing error: Unexpected token <
+
+/workspace/src/views/SettingsView.vue
+  1:1  error  Parsing error: Unexpected token <
+
+/workspace/tailwind.config.js
+  2:1  error  Parsing error: The keyword 'export' is reserved
+
+/workspace/vite.config.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+✖ 14 problems (14 errors, 0 warnings)
+
+ ELIFECYCLE  Command failed with exit code 1.
+$ pnpm run build
+
+
+> pos-auth-app@0.1.0 build /workspace
+> vue-tsc && vite build
+
+
+/workspace/node_modules/.pnpm/vue-tsc@1.8.27_typescript@5.9.2/node_modules/vue-tsc/bin/vue-tsc.js:68
+			throw err;
+			^
+Search string not found: "/supportedTSExtensions = .*(?=;)/"
+(Use `node --trace-uncaught ...` to show where the exception was thrown)
+
+Node.js v20.11.0
+ ELIFECYCLE  Command failed with exit code 1.
+$ rm postcss.config.js tailwind.config.js
+

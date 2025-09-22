@@ -9,7 +9,8 @@ from django.http import HttpRequest, Http404
 from django.shortcuts import get_object_or_404
 
 from apps.catalog.models import Product
-from .services import record_entry, EntryError, get_lot_options
+from .models import Warehouse, StockLot, Movement
+from .services import create_entry, create_exit, StockError, NotEnoughStock, NoLotsAvailable
 
 router = Router()
 
@@ -20,23 +21,51 @@ class EntryIn(Schema):
     expiry_date: date
     qty: Decimal
     unit_cost: Decimal
-    warehouse_id: Optional[int] = None
+    warehouse_id: int
+    reason: Optional[str] = Movement.Reason.PURCHASE
 
 class EntryOut(Schema):
     movement_id: int
     lot_id: int
     product_id: int
+    lot_code: str
     new_qty_on_hand: Decimal
+    warehouse_name: str
 
-class LotOptionOut(Schema):
+class ExitIn(Schema):
+    product_id: int
+    qty_total: Decimal
+    warehouse_id: int
+    reason: Optional[str] = Movement.Reason.SALE
+
+class ExitMovementOut(Schema):
+    movement_id: int
+    lot_id: int
+    lot_code: str
+    qty_taken: Decimal
+    unit_cost: Decimal
+    expiry_date: date
+
+class ExitOut(Schema):
+    total_qty: Decimal
+    movements: List[ExitMovementOut]
+    warehouse_name: str
+
+class LotOut(Schema):
     id: int
     lot_code: str
     expiry_date: date
     qty_on_hand: Decimal
+    qty_available: Decimal
+    unit_cost: Decimal
+    warehouse_name: str
+    is_quarantined: bool
+    is_reserved: bool
+    created_at: date
 
-class LotOptionsOut(Schema):
-    recommended_id: Optional[int]
-    options: List[LotOptionOut]
+class LotsListOut(Schema):
+    lots: List[LotOut]
+    total_count: int
 
 class ErrorOut(Schema):
     error: str
@@ -47,90 +76,162 @@ def stock_health(request) -> dict:
     """Health check endpoint for stock module."""
     return {"status": "ok", "module": "stock"}
 
-@router.get("/lots/options", response={200: LotOptionsOut, 400: ErrorOut, 404: ErrorOut})
-def get_lot_options_endpoint(
-    request: HttpRequest,
-    product_id: int = Query(..., description="ID del producto"),
-    qty: Decimal = Query(..., description="Cantidad solicitada"),
-    customer_id: Optional[int] = Query(None, description="ID del cliente (opcional)")
-):
+@router.post("/entry", response={201: EntryOut, 400: ErrorOut, 404: ErrorOut})
+def create_stock_entry(request: HttpRequest, payload: EntryIn):
     """
-    Obtiene opciones de lotes para un producto con recomendación FEFO.
+    Crea una entrada de stock de forma transaccional.
     
-    Retorna:
-    - recommended_id: ID del lote recomendado (FEFO) o null si no hay lotes
-    - options: Lista de lotes disponibles ordenados por FEFO
+    - Busca o crea el lote según (product, lot_code, warehouse)
+    - Incrementa qty_on_hand del lote
+    - Crea Movement de tipo ENTRY
+    - Validaciones: qty > 0, unit_cost > 0, consistencia de fechas
     """
-    # Validaciones
-    if qty <= 0:
-        return 400, {"error": "INVALID_QTY", "message": "qty inválida"}
-    
     try:
-        # Verificar que el producto existe
-        product = get_object_or_404(Product, id=product_id)
+        # Obtener objetos
+        product = get_object_or_404(Product, id=payload.product_id)
+        warehouse = get_object_or_404(Warehouse, id=payload.warehouse_id)
         
-        # Obtener opciones de lotes
-        lot_options = get_lot_options(product, qty)
-        
-        # Preparar respuesta
-        options = [
-            LotOptionOut(
-                id=option.lot_id,
-                lot_code=option.lot_code,
-                expiry_date=option.expiry_date,
-                qty_on_hand=option.qty_available
-            )
-            for option in lot_options
-        ]
-        
-        # El recomendado es el primero (FEFO) si hay opciones
-        recommended_id = options[0].id if options else None
-        
-        return 200, LotOptionsOut(
-            recommended_id=recommended_id,
-            options=options
-        )
-    except Http404:
-        # Re-lanzar Http404 para que Django Ninja devuelva 404
-        raise
-    except Exception as e:
-        return 400, {"error": "VALIDATION_ERROR", "message": str(e)}
-
-@router.post("/entry", response={201: EntryOut, 400: ErrorOut, 404: ErrorOut, 409: ErrorOut})
-def create_entry(request: HttpRequest, payload: EntryIn):
-    """
-    Carga stock en un LOTE (crea o actualiza).
-    Reglas:
-    - qty > 0 (400)
-    - Si el lote ya existe, el expiry_date debe coincidir (409 LOT_MISMATCH)
-    """
-    # En MVP, user_id puede venir del request.user.id si hay auth; usamos 1 como placeholder si no hay auth.
-    user_id = getattr(getattr(request, "user", None), "id", None) or 1
-
-    try:
-        mv = record_entry(
-            product_id=payload.product_id,
+        # Crear entrada usando el servicio transaccional
+        movement = create_entry(
+            product=product,
             lot_code=payload.lot_code,
             expiry_date=payload.expiry_date,
             qty=payload.qty,
             unit_cost=payload.unit_cost,
-            user_id=user_id,
-            warehouse_id=payload.warehouse_id,
+            warehouse=warehouse,
+            reason=payload.reason,
+            created_by=getattr(request, 'user', None)
         )
-        out = EntryOut(
-            movement_id=mv.id,
-            lot_id=mv.lot_id,
-            product_id=mv.product_id,
-            new_qty_on_hand=mv.lot.qty_on_hand,
+        
+        return 201, EntryOut(
+            movement_id=movement.id,
+            lot_id=movement.lot.id,
+            product_id=movement.product.id,
+            lot_code=movement.lot.lot_code,
+            new_qty_on_hand=movement.lot.qty_on_hand,
+            warehouse_name=warehouse.name
         )
-        return 201, out
-
-    except EntryError as e:
-        code = e.code
-        status = 409 if code in ("LOT_MISMATCH",) else 400
-        return status, {"error": code, "message": str(e)}
-
+        
+    except StockError as e:
+        return 400, {"error": e.code, "message": str(e)}
+    except Http404:
+        raise
     except Exception as e:
-        # get_object_or_404 levanta Http404 -> Ninja lo convierte en 404 automáticamente;
-        # si llega acá con otra excepción, devolvemos 400 genérico
+        return 400, {"error": "VALIDATION_ERROR", "message": str(e)}
+
+@router.post("/exit", response={201: ExitOut, 400: ErrorOut, 404: ErrorOut})
+def create_stock_exit(request: HttpRequest, payload: ExitIn):
+    """
+    Crea una salida de stock siguiendo FEFO de forma transaccional.
+    
+    - Selecciona lotes disponibles ordenados por FEFO
+    - Puede generar múltiples movimientos si se necesitan varios lotes
+    - Validaciones: qty > 0, stock suficiente disponible
+    - Respeta is_quarantined=False y is_reserved=False
+    """
+    try:
+        # Obtener objetos
+        product = get_object_or_404(Product, id=payload.product_id)
+        warehouse = get_object_or_404(Warehouse, id=payload.warehouse_id)
+        
+        # Crear salida usando el servicio transaccional FEFO
+        movements = create_exit(
+            product=product,
+            qty_total=payload.qty_total,
+            warehouse=warehouse,
+            reason=payload.reason,
+            created_by=getattr(request, 'user', None)
+        )
+        
+        # Preparar respuesta con detalles de cada movimiento
+        movement_details = [
+            ExitMovementOut(
+                movement_id=mv.id,
+                lot_id=mv.lot.id,
+                lot_code=mv.lot.lot_code,
+                qty_taken=mv.qty,
+                unit_cost=mv.unit_cost,
+                expiry_date=mv.lot.expiry_date
+            )
+            for mv in movements
+        ]
+        
+        return 201, ExitOut(
+            total_qty=payload.qty_total,
+            movements=movement_details,
+            warehouse_name=warehouse.name
+        )
+        
+    except (NotEnoughStock, NoLotsAvailable) as e:
+        return 400, {"error": e.code, "message": str(e)}
+    except StockError as e:
+        return 400, {"error": e.code, "message": str(e)}
+    except Http404:
+        raise
+    except Exception as e:
+        return 400, {"error": "VALIDATION_ERROR", "message": str(e)}
+
+@router.get("/lots", response={200: LotsListOut, 400: ErrorOut, 404: ErrorOut})
+def get_stock_lots(
+    request: HttpRequest,
+    product_id: Optional[int] = Query(None, description="Filtrar por producto"),
+    warehouse_id: Optional[int] = Query(None, description="Filtrar por depósito"),
+    only_available: bool = Query(False, description="Solo lotes disponibles (no cuarentena/reserva)"),
+    limit: int = Query(50, description="Límite de resultados", ge=1, le=200)
+):
+    """
+    Obtiene lista de lotes con filtros y ordenamiento FEFO.
+    
+    - Filtros: product_id, warehouse_id, only_available
+    - Ordenamiento: FEFO (expiry_date ASC, id ASC)
+    - Paginación: limit (máximo 200)
+    """
+    try:
+        # Construir queryset base
+        queryset = StockLot.objects.select_related('product', 'warehouse')
+        
+        # Aplicar filtros
+        if product_id:
+            product = get_object_or_404(Product, id=product_id)
+            queryset = queryset.filter(product=product)
+            
+        if warehouse_id:
+            warehouse = get_object_or_404(Warehouse, id=warehouse_id)
+            queryset = queryset.filter(warehouse=warehouse)
+            
+        if only_available:
+            queryset = queryset.filter(
+                qty_on_hand__gt=0,
+                is_quarantined=False,
+                is_reserved=False
+            )
+        
+        # Ordenamiento FEFO y límite
+        lots = queryset.order_by('expiry_date', 'id')[:limit]
+        
+        # Preparar respuesta
+        lot_data = [
+            LotOut(
+                id=lot.id,
+                lot_code=lot.lot_code,
+                expiry_date=lot.expiry_date,
+                qty_on_hand=lot.qty_on_hand,
+                qty_available=lot.qty_available,
+                unit_cost=lot.unit_cost,
+                warehouse_name=lot.warehouse.name,
+                is_quarantined=lot.is_quarantined,
+                is_reserved=lot.is_reserved,
+                created_at=lot.created_at.date()
+            )
+            for lot in lots
+        ]
+        
+        return 200, LotsListOut(
+            lots=lot_data,
+            total_count=len(lot_data)
+        )
+        
+    except Http404:
+        raise
+    except Exception as e:
         return 400, {"error": "VALIDATION_ERROR", "message": str(e)}

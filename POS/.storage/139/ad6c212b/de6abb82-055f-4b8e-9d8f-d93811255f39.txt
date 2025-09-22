@@ -1,0 +1,1 @@
+$ ps aux | grep -E "(vite|dev)" | grep -v grep

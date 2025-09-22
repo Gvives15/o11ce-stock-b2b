@@ -1,0 +1,91 @@
+$ curl -s http://localhost:5173/ | head -20
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <script type="module" src="/@vite/client"></script>
+
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistema POS - Autenticación y Roles</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>$ pnpm run lint
+
+
+> pos-auth-app@0.1.0 lint /workspace
+> eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore
+
+
+/workspace/src/components/Topbar.vue
+  63:1  error  Parsing error: x-invalid-end-tag  vue/no-parsing-error
+
+/workspace/src/layouts/POSLayout.vue
+  40:1  error  Parsing error: x-invalid-end-tag  vue/no-parsing-error
+
+/workspace/src/views/PosView.vue
+  179:1  error  Parsing error: x-invalid-end-tag  vue/no-parsing-error
+
+✖ 3 problems (3 errors, 0 warnings)
+
+ ELIFECYCLE  Command failed with exit code 1.
+$ pnpm run lint
+
+
+> pos-auth-app@0.1.0 lint /workspace
+> eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore
+
+$ pnpm run build
+
+
+> pos-auth-app@0.1.0 build /workspace
+> vite build
+
+vite v5.4.20 building for production...
+transforming...
+✓ 108 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                                          0.48 kB │ gzip:  0.32 kB
+dist/assets/POSLayout-LnuaBlpU.css                                       1.65 kB │ gzip:  0.53 kB
+dist/assets/index-B7JJOIXd.css                                          19.12 kB │ gzip:  4.24 kB
+dist/assets/DeniedView-DUkBLL2_.js                                       2.78 kB │ gzip:  1.30 kB
+dist/assets/LoginView-DgIEMGY5.js                                        4.05 kB │ gzip:  1.70 kB
+dist/assets/PosView-DTXVwO6x.js                                          4.80 kB │ gzip:  1.96 kB
+dist/assets/POSLayout.vue_vue_type_script_setup_true_lang-Crj_OfcJ.js    5.67 kB │ gzip:  2.52 kB
+dist/assets/HistoryView-kD1IeIZl.js                                      6.60 kB │ gzip:  2.26 kB
+dist/assets/SettingsView-CNUx-Uq-.js                                     7.43 kB │ gzip:  2.21 kB
+dist/assets/index-NUHvU8wn.js                                          138.82 kB │ gzip: 54.36 kB
+✓ built in 2.96s
+$ pnpm run lint
+
+
+> pos-auth-app@0.1.0 lint /workspace
+> eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore
+
+
+/workspace/src/components/InterceptorDemo.vue
+  113:8   error  'axiosClient' is defined but never used         @typescript-eslint/no-unused-vars
+  144:11  error  'response' is assigned a value but never used   @typescript-eslint/no-unused-vars
+  162:11  error  'mockError' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  292:1   error  Parsing error: x-invalid-end-tag                vue/no-parsing-error
+
+/workspace/src/lib/__tests__/axiosClient.test.ts
+  15:7  error  'mockedAxios' is assigned a value but never used         @typescript-eslint/no-unused-vars
+  19:7  error  'mockedUseAuthStore' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/workspace/src/lib/axiosClient.ts
+  69:40  error  'reject' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/workspace/src/stores/auth.ts
+  61:7  error  Unnecessary try/catch wrapper  no-useless-catch
+
+/workspace/src/views/SettingsView.vue
+  150:1  error  Parsing error: x-invalid-end-tag  vue/no-parsing-error
+
+✖ 9 problems (9 errors, 0 warnings)
+
+ ELIFECYCLE  Command failed with exit code 1.

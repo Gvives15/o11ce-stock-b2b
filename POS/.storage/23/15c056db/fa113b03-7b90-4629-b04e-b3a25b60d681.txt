@@ -1,0 +1,45 @@
+$ pnpm install
+Progress: resolved 1, reused 0, downloaded 0, added 0
+ WARN  deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+Progress: resolved 15, reused 2, downloaded 12, added 0
+Progress: resolved 91, reused 52, downloaded 36, added 0
+Progress: resolved 267, reused 160, downloaded 96, added 0
+Progress: resolved 362, reused 197, downloaded 121, added 0
+Progress: resolved 371, reused 199, downloaded 128, added 0
+ WARN  5 deprecated subdependencies found: @humanwhocodes/config-array@0.13.0, @humanwhocodes/object-schema@2.0.3, glob@7.2.3, inflight@1.0.6, rimraf@3.0.2
+Progress: resolved 378, reused 199, downloaded 136, added 0
+Packages: +335
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 378, reused 199, downloaded 136, added 335, done
+
+dependencies:
++ axios 1.12.2
++ nprogress 0.2.0
++ pinia 2.3.1 (3.0.3 is available)
++ vue 3.5.21
++ vue-router 4.5.1
+
+devDependencies:
++ @types/node 20.19.17 (24.5.2 is available)
++ @types/nprogress 0.2.3
++ @vitejs/plugin-vue 4.6.2 (6.0.1 is available)
++ @vue/eslint-config-typescript 12.0.0 (14.6.0 is available)
++ autoprefixer 10.4.21
++ eslint 8.57.1 (9.36.0 is available) deprecated
++ eslint-plugin-vue 9.33.0 (10.4.0 is available)
++ postcss 8.5.6
++ tailwindcss 3.4.17 (4.1.13 is available)
++ typescript 5.9.2
++ vite 5.4.20 (7.1.6 is available)
++ vitest 1.6.1 (3.2.4 is available)
++ vue-tsc 1.8.27 (3.0.7 is available)
+
+╭ Warning ─────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│   Ignored build scripts: esbuild, vue-demi.                                  │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+│   to run scripts.                                                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+Done in 8.4s using pnpm v10.17.0

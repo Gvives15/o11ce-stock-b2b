@@ -3,8 +3,9 @@
 import pytest
 from decimal import Decimal
 from datetime import date, timedelta
-from apps.catalog.utils import apply_discount, get_active_benefits
-from apps.catalog.models import Benefit
+from django.test import TestCase
+from apps.catalog.utils import apply_discount, get_active_benefits, normalize_qty
+from apps.catalog.models import Benefit, Product
 
 
 class TestApplyDiscount:
@@ -192,3 +193,84 @@ class TestGetActiveBenefits:
         """Test getting benefits when none match criteria."""
         benefits = get_active_benefits(segment="nonexistent")
         assert len(benefits) == 0
+
+
+class TestNormalizeQty(TestCase):
+    """Tests para la función normalize_qty."""
+    
+    def setUp(self):
+        """Configuración inicial para los tests."""
+        # Crear producto P2 con pack_size=10 según especificación
+        self.product_p2 = Product.objects.create(
+            code="P2-MERMELADA",
+            name="Mermelada de Frutilla 454g",
+            brand="Arcor",
+            unit="package",
+            category="Dulces",
+            price=Decimal("650.00"),
+            pack_size=10
+        )
+        
+        # Crear producto sin pack_size
+        self.product_unit = Product.objects.create(
+            code="UNIT-PRODUCT",
+            name="Producto Individual",
+            brand="Test",
+            unit="unit",
+            category="Test",
+            price=Decimal("100.00"),
+            pack_size=None
+        )
+    
+    def test_normalize_qty_package_to_units(self):
+        """Test B1-BE-02: normalize_qty(P2,1,'package')==10."""
+        result = normalize_qty(self.product_p2, 1, 'package')
+        self.assertEqual(result, Decimal('10'))
+    
+    def test_normalize_qty_multiple_packages(self):
+        """Test conversión de múltiples paquetes a unidades."""
+        result = normalize_qty(self.product_p2, 3, 'package')
+        self.assertEqual(result, Decimal('30'))
+    
+    def test_normalize_qty_decimal_packages(self):
+        """Test conversión con cantidades decimales."""
+        result = normalize_qty(self.product_p2, 2.5, 'package')
+        self.assertEqual(result, Decimal('25'))
+    
+    def test_normalize_qty_unit_passthrough(self):
+        """Test que las unidades se mantengan sin cambios."""
+        result = normalize_qty(self.product_p2, 5, 'unit')
+        self.assertEqual(result, Decimal('5'))
+        
+        result = normalize_qty(self.product_unit, 7, 'unit')
+        self.assertEqual(result, Decimal('7'))
+    
+    def test_normalize_qty_package_without_pack_size_raises_error(self):
+        """Test que falle cuando se intenta usar package sin pack_size."""
+        with self.assertRaises(ValueError) as context:
+            normalize_qty(self.product_unit, 1, 'package')
+        
+        self.assertIn("does not have pack_size defined", str(context.exception))
+    
+    def test_normalize_qty_invalid_unit_raises_error(self):
+        """Test que falle con unidad inválida."""
+        with self.assertRaises(ValueError) as context:
+            normalize_qty(self.product_p2, 1, 'invalid_unit')
+        
+        self.assertIn("Invalid unit type", str(context.exception))
+    
+    def test_normalize_qty_zero_quantity(self):
+        """Test con cantidad cero."""
+        result = normalize_qty(self.product_p2, 0, 'package')
+        self.assertEqual(result, Decimal('0'))
+        
+        result = normalize_qty(self.product_p2, 0, 'unit')
+        self.assertEqual(result, Decimal('0'))
+    
+    def test_normalize_qty_string_input(self):
+        """Test que acepte strings como cantidad."""
+        result = normalize_qty(self.product_p2, "2", 'package')
+        self.assertEqual(result, Decimal('20'))
+        
+        result = normalize_qty(self.product_p2, "3.5", 'unit')
+        self.assertEqual(result, Decimal('3.5'))

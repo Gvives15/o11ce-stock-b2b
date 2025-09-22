@@ -202,6 +202,171 @@ class FEFOServiceTests(TestCase):
         self.assertEqual(options[0].lot_id, self.lot_a.id)
         self.assertEqual(options[1].lot_id, lot_c.id)
         self.assertEqual(options[2].lot_id, self.lot_b.id)
+    
+    def test_override_lote_con_vida_util_insuficiente(self):
+        """Test que override de lote con vida útil insuficiente falla correctamente."""
+        # Crear lote con vida útil insuficiente (5 días)
+        today = date.today()
+        lot_short_life = StockLot.objects.create(
+            product=self.product,
+            lot_code='LOT-SHORT',
+            expiry_date=today + timedelta(days=5),
+            qty_on_hand=Decimal('10.000'),
+            unit_cost=Decimal('8.50'),
+            warehouse=self.warehouse
+        )
+        
+        # Intentar override con vida útil mínima de 15 días
+        with self.assertRaises(StockError) as context:
+            allocate_lots_fefo(
+                self.product, 
+                Decimal('5.000'), 
+                chosen_lot_id=lot_short_life.id,
+                min_shelf_life_days=15
+            )
+        
+        self.assertEqual(context.exception.code, "INSUFFICIENT_SHELF_LIFE")
+        self.assertIn("no cumple vida útil mínima", str(context.exception))
+    
+    def test_override_lote_valido_con_vida_util_adecuada(self):
+        """Test que override de lote con vida útil adecuada funciona correctamente."""
+        # Crear lote con vida útil adecuada (25 días)
+        today = date.today()
+        lot_good_life = StockLot.objects.create(
+            product=self.product,
+            lot_code='LOT-GOOD',
+            expiry_date=today + timedelta(days=25),
+            qty_on_hand=Decimal('8.000'),
+            unit_cost=Decimal('9.50'),
+            warehouse=self.warehouse
+        )
+        
+        # Override con vida útil mínima de 15 días (debe funcionar)
+        plan = allocate_lots_fefo(
+            self.product, 
+            Decimal('5.000'), 
+            chosen_lot_id=lot_good_life.id,
+            min_shelf_life_days=15
+        )
+        
+        self.assertEqual(len(plan), 1)
+        self.assertEqual(plan[0].lot_id, lot_good_life.id)
+        self.assertEqual(plan[0].qty_allocated, Decimal('5.000'))
+    
+    def test_override_parcial_con_vida_util_resto_lotes(self):
+        """Test que override parcial completa con lotes que cumplen vida útil."""
+        # Crear un producto nuevo para evitar conflictos con lotes del setUp
+        product_new = Product.objects.create(
+            code='TEST002',
+            name='Producto Test 2',
+            price=Decimal('15.00')
+        )
+        
+        # Crear lote con vida útil corta (5 días)
+        today = date.today()
+        lot_short = StockLot.objects.create(
+            product=product_new,
+            lot_code='LOT-SHORT',
+            expiry_date=today + timedelta(days=5),
+            qty_on_hand=Decimal('3.000'),
+            unit_cost=Decimal('8.00'),
+            warehouse=self.warehouse
+        )
+        
+        # Crear lote con vida útil larga (40 días)
+        lot_long = StockLot.objects.create(
+            product=product_new,
+            lot_code='LOT-LONG',
+            expiry_date=today + timedelta(days=40),
+            qty_on_hand=Decimal('10.000'),
+            unit_cost=Decimal('10.00'),
+            warehouse=self.warehouse
+        )
+        
+        # Override del lote con vida útil corta, pero pedir más cantidad
+        # Debe tomar 3 del lote corto y 2 del lote largo (que cumple vida útil)
+        plan = allocate_lots_fefo(
+            product_new, 
+            Decimal('5.000'), 
+            chosen_lot_id=lot_short.id,
+            min_shelf_life_days=15
+        )
+        
+        self.assertEqual(len(plan), 2)
+        
+        # Primer plan: lote corto (override) - 3 unidades
+        self.assertEqual(plan[0].lot_id, lot_short.id)
+        self.assertEqual(plan[0].qty_allocated, Decimal('3.000'))
+        
+        # Segundo plan: lote largo (FEFO) - 2 unidades restantes
+        self.assertEqual(plan[1].lot_id, lot_long.id)
+        self.assertEqual(plan[1].qty_allocated, Decimal('2.000'))
+    
+    def test_lote_vencido_no_disponible(self):
+        """Test que lotes vencidos no están disponibles."""
+        # Crear un producto nuevo para evitar conflictos con lotes del setUp
+        product_new = Product.objects.create(
+            code='TEST003',
+            name='Producto Test 3',
+            price=Decimal('20.00')
+        )
+        
+        # Crear lote vencido (ayer)
+        yesterday = date.today() - timedelta(days=1)
+        expired_lot = StockLot.objects.create(
+            product=product_new,
+            lot_code='LOT-EXPIRED',
+            expiry_date=yesterday,
+            qty_on_hand=Decimal('10.000'),
+            unit_cost=Decimal('8.00'),
+            warehouse=self.warehouse
+        )
+        
+        # Verificar que qty_available es 0 para lote vencido
+        self.assertEqual(expired_lot.qty_available, Decimal('0.000'))
+        
+        # Verificar que no aparece en opciones de lotes
+        options = get_lot_options(product_new, Decimal('1.000'))
+        lot_ids = [option.lot_id for option in options]
+        self.assertNotIn(expired_lot.id, lot_ids)
+        
+        # Verificar que no se puede asignar con FEFO
+        with self.assertRaises(StockError) as context:
+            allocate_lots_fefo(product_new, Decimal('1.000'))
+        
+        # Puede ser INSUFFICIENT_STOCK o INSUFFICIENT_SHELF_LIFE dependiendo de la lógica
+        self.assertIn(context.exception.code, ["INSUFFICIENT_STOCK", "INSUFFICIENT_SHELF_LIFE"])
+    
+    def test_lote_vencido_con_override_falla(self):
+        """Test que override de lote vencido falla."""
+        # Crear un producto nuevo para evitar conflictos con lotes del setUp
+        product_new = Product.objects.create(
+            code='TEST004',
+            name='Producto Test 4',
+            price=Decimal('25.00')
+        )
+        
+        # Crear lote vencido (ayer)
+        yesterday = date.today() - timedelta(days=1)
+        expired_lot = StockLot.objects.create(
+            product=product_new,
+            lot_code='LOT-EXPIRED',
+            expiry_date=yesterday,
+            qty_on_hand=Decimal('10.000'),
+            unit_cost=Decimal('8.00'),
+            warehouse=self.warehouse
+        )
+        
+        # Intentar override de lote vencido debe fallar
+        with self.assertRaises(StockError) as context:
+            allocate_lots_fefo(
+                product_new, 
+                Decimal('5.000'), 
+                chosen_lot_id=expired_lot.id
+            )
+        
+        # Puede ser INVALID_LOT o INSUFFICIENT_SHELF_LIFE dependiendo de la lógica
+        self.assertIn(context.exception.code, ["INVALID_LOT", "INSUFFICIENT_SHELF_LIFE"])
 
 
 class FEFOSingleThreadTestCase(TestCase):

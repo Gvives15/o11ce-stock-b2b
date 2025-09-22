@@ -24,29 +24,9 @@ if 'DATABASE_URL' in os.environ:
 # Cache configuration for tests
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'test-cache',
+        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
     }
 }
-
-# Use Redis if available (for CI), otherwise use dummy backend
-if 'REDIS_URL' in os.environ:
-    try:
-        import django_redis
-        CACHES['default'] = {
-            'BACKEND': 'django_redis.cache.RedisCache',
-            'LOCATION': os.environ['REDIS_URL'],
-            'OPTIONS': {
-                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-                'CONNECTION_POOL_KWARGS': {
-                    'max_connections': 2,  # Reduced for tests
-                    'retry_on_timeout': True,
-                }
-            }
-        }
-    except ImportError:
-        # Keep default locmem cache if django_redis is not available
-        pass
 
 # Celery configuration for tests
 CELERY_TASK_ALWAYS_EAGER = True
@@ -81,12 +61,12 @@ LOGGING = {
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
-            'level': 'WARNING',  # Reduce noise in tests
+            'level': 'INFO',  # Changed to INFO to see debug logs
         },
     },
     'root': {
         'handlers': ['console'],
-        'level': 'WARNING',
+        'level': 'INFO',  # Changed to INFO
     },
     'loggers': {
         'django': {
@@ -187,7 +167,9 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    # Skip some middleware in tests for speed
+    # Observability middleware
+    'apps.core.middleware.RequestIDMiddleware',
+    'apps.core.middleware.AccessLogMiddleware',
 ]
 
 # API settings for tests

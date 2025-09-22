@@ -1,4 +1,5 @@
 # apps/stock/services.py
+import logging
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional, List, Dict, Any, NamedTuple
@@ -6,9 +7,12 @@ from typing import Optional, List, Dict, Any, NamedTuple
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
+from django.contrib.auth.models import User
 
 from apps.catalog.models import Product
 from .models import StockLot, Movement, Warehouse
+
+logger = logging.getLogger(__name__)
 
 
 class LotOption(NamedTuple):
@@ -54,6 +58,228 @@ class NoLotsAvailable(StockError):
         super().__init__("NO_LOTS_AVAILABLE", message)
         self.product_id = product_id
         self.criteria = criteria
+
+
+@transaction.atomic
+def create_entry(
+    product: Product,
+    lot_code: str,
+    expiry_date: date,
+    qty: Decimal,
+    unit_cost: Decimal,
+    warehouse: Warehouse,
+    reason: str = Movement.Reason.PURCHASE,
+    created_by: User = None
+) -> Movement:
+    """
+    Crea una entrada de stock de forma transaccional.
+    
+    Args:
+        product: Producto
+        lot_code: Código del lote
+        expiry_date: Fecha de vencimiento
+        qty: Cantidad a ingresar
+        unit_cost: Costo unitario
+        warehouse: Depósito
+        reason: Motivo del movimiento
+        created_by: Usuario que crea el movimiento
+    
+    Returns:
+        Movement creado
+        
+    Raises:
+        ValidationError: Si los datos son inválidos
+        StockError: Si hay errores de negocio
+    """
+    if qty <= 0:
+        raise StockError("VALIDATION_ERROR", "La cantidad debe ser mayor a 0")
+    
+    if unit_cost <= 0:
+        raise StockError("VALIDATION_ERROR", "El costo unitario debe ser mayor a 0")
+    
+    # Buscar o crear el lote
+    stock_lot, created = StockLot.objects.get_or_create(
+        product=product,
+        lot_code=lot_code,
+        warehouse=warehouse,
+        defaults={
+            'expiry_date': expiry_date,
+            'unit_cost': unit_cost,
+            'qty_on_hand': 0
+        }
+    )
+    
+    # Si el lote ya existía, verificar consistencia
+    if not created:
+        if stock_lot.expiry_date != expiry_date:
+            raise StockError(
+                "INCONSISTENT_LOT", 
+                f"El lote {lot_code} ya existe con fecha de vencimiento {stock_lot.expiry_date}, "
+                f"pero se intenta ingresar con fecha {expiry_date}"
+            )
+    
+    # Actualizar cantidad en el lote
+    stock_lot.qty_on_hand += qty
+    stock_lot.save()
+    
+    # Crear el movimiento
+    movement = Movement.objects.create(
+        type=Movement.Type.ENTRY,
+        product=product,
+        lot=stock_lot,
+        qty=qty,
+        unit_cost=unit_cost,
+        reason=reason,
+        created_by=created_by
+    )
+    
+    # Log estructurado
+    logger.info(
+        "Stock entry created",
+        extra={
+            'movement_id': movement.id,
+            'product_code': product.code,
+            'lot_code': lot_code,
+            'qty': float(qty),
+            'unit_cost': float(unit_cost),
+            'warehouse': warehouse.name,
+            'reason': reason
+        }
+    )
+    
+    return movement
+
+
+def pick_lots_fefo(
+    product: Product,
+    qty_needed: Decimal,
+    warehouse: Warehouse
+) -> List[Dict[str, Any]]:
+    """
+    Selecciona lotes siguiendo FEFO para una cantidad específica.
+    
+    Args:
+        product: Producto
+        qty_needed: Cantidad necesaria
+        warehouse: Depósito
+    
+    Returns:
+        Lista de diccionarios con lot_id y qty_to_take
+        
+    Raises:
+        NotEnoughStock: Si no hay suficiente stock disponible
+    """
+    # Obtener lotes disponibles ordenados por FEFO
+    available_lots = StockLot.objects.select_for_update().filter(
+        product=product,
+        warehouse=warehouse,
+        qty_on_hand__gt=0,
+        is_quarantined=False,
+        is_reserved=False
+    ).order_by('expiry_date', 'id')
+    
+    # Verificar stock total disponible
+    total_available = sum(lot.qty_on_hand for lot in available_lots)
+    if total_available < qty_needed:
+        raise NotEnoughStock(product.id, qty_needed, total_available)
+    
+    # Planificar asignación FEFO
+    allocation_plan = []
+    remaining_qty = qty_needed
+    
+    for lot in available_lots:
+        if remaining_qty <= 0:
+            break
+            
+        qty_to_take = min(lot.qty_on_hand, remaining_qty)
+        allocation_plan.append({
+            'lot_id': lot.id,
+            'qty_to_take': qty_to_take
+        })
+        remaining_qty -= qty_to_take
+    
+    return allocation_plan
+
+
+@transaction.atomic
+def create_exit(
+    product: Product,
+    qty_total: Decimal,
+    warehouse: Warehouse,
+    reason: str = Movement.Reason.SALE,
+    created_by: User = None
+) -> List[Movement]:
+    """
+    Crea una salida de stock siguiendo FEFO de forma transaccional.
+    Puede generar múltiples movimientos si se necesitan varios lotes.
+    
+    Args:
+        product: Producto
+        qty_total: Cantidad total a sacar
+        warehouse: Depósito
+        reason: Motivo del movimiento
+        created_by: Usuario que crea el movimiento
+    
+    Returns:
+        Lista de movimientos creados (uno por lote usado)
+        
+    Raises:
+        NotEnoughStock: Si no hay suficiente stock disponible
+        StockError: Si hay errores de negocio
+    """
+    if qty_total <= 0:
+        raise StockError("VALIDATION_ERROR", "La cantidad debe ser mayor a 0")
+    
+    # Obtener plan de asignación FEFO
+    allocation_plan = pick_lots_fefo(product, qty_total, warehouse)
+    
+    movements = []
+    
+    for allocation in allocation_plan:
+        # Obtener el lote con lock
+        lot = StockLot.objects.select_for_update().get(id=allocation['lot_id'])
+        qty_to_take = allocation['qty_to_take']
+        
+        # Verificar que el lote aún tenga stock suficiente
+        if lot.qty_on_hand < qty_to_take:
+            raise StockError(
+                "CONCURRENT_MODIFICATION",
+                f"El lote {lot.lot_code} fue modificado concurrentemente. "
+                f"Stock actual: {lot.qty_on_hand}, requerido: {qty_to_take}"
+            )
+        
+        # Descontar del lote
+        lot.qty_on_hand -= qty_to_take
+        lot.save()
+        
+        # Crear movimiento (unit_cost se toma del lote)
+        movement = Movement.objects.create(
+            type=Movement.Type.EXIT,
+            product=product,
+            lot=lot,
+            qty=qty_to_take,
+            unit_cost=lot.unit_cost,  # Se toma del lote
+            reason=reason,
+            created_by=created_by
+        )
+        
+        movements.append(movement)
+        
+        # Log estructurado
+        logger.info(
+            "Stock exit created",
+            extra={
+                'movement_id': movement.id,
+                'product_code': product.code,
+                'lot_code': lot.lot_code,
+                'qty': float(qty_to_take),
+                'unit_cost': float(lot.unit_cost),
+                'warehouse': warehouse.name,
+                'reason': reason
+            }
+        )
+    
+    return movements
 
 
 def get_lot_options(
@@ -153,26 +379,41 @@ def allocate_lots_fefo(
             f"Stock insuficiente. Solicitado: {qty_needed}, disponible: {total_available_any_expiry}"
         )
     
-    # Aplicar filtro de vida útil mínima
-    base_query = base_query.filter(expiry_date__gte=min_expiry_date)
-    
-    # Verificar si hay stock suficiente con vida útil adecuada
-    total_available_with_shelf_life = sum(lot.qty_on_hand for lot in base_query)
-    if total_available_with_shelf_life < qty_needed:
-        raise StockError(
-            "INSUFFICIENT_SHELF_LIFE", 
-            f"Vida útil insuficiente. Solicitado: {qty_needed}, disponible con vida útil adecuada: {total_available_with_shelf_life}"
-        )
+    # Aplicar filtro de vida útil mínima solo si no hay override de lote específico
+    if chosen_lot_id is None:
+        base_query = base_query.filter(expiry_date__gte=min_expiry_date)
+        
+        # Verificar si hay stock suficiente con vida útil adecuada
+        total_available_with_shelf_life = sum(lot.qty_on_hand for lot in base_query)
+        if total_available_with_shelf_life < qty_needed:
+            raise StockError(
+                "INSUFFICIENT_SHELF_LIFE", 
+                f"Vida útil insuficiente. Solicitado: {qty_needed}, disponible con vida útil adecuada: {total_available_with_shelf_life}"
+            )
     
     allocation_plan = []
     remaining_qty = qty_needed
     
     # Si hay override de lote específico
     if chosen_lot_id is not None:
+        # Primero verificar que el lote elegido existe y tiene stock
         try:
-            chosen_lot = base_query.get(id=chosen_lot_id)
+            chosen_lot = StockLot.objects.get(
+                id=chosen_lot_id,
+                product=product,
+                qty_on_hand__gt=0,
+                is_quarantined=False,
+                is_reserved=False
+            )
         except StockLot.DoesNotExist:
             raise StockError("INVALID_LOT", f"Lote {chosen_lot_id} no válido o sin stock disponible")
+        
+        # Verificar que el lote elegido cumple con la vida útil mínima solo si no hay cantidad restante
+        if chosen_lot.qty_on_hand >= qty_needed and chosen_lot.expiry_date < min_expiry_date:
+            raise StockError(
+                "INSUFFICIENT_SHELF_LIFE", 
+                f"Lote {chosen_lot.lot_code} no cumple vida útil mínima de {min_shelf_life_days} días"
+            )
         
         # Asignar del lote elegido lo que se pueda
         qty_from_chosen = min(remaining_qty, chosen_lot.qty_on_hand)
@@ -184,10 +425,12 @@ def allocate_lots_fefo(
     
     # Si aún queda cantidad por asignar, completar con FEFO
     if remaining_qty > 0:
-        # Excluir el lote ya usado en el override
+        # Excluir el lote ya usado en el override y aplicar filtro de vida útil
         fefo_query = base_query.order_by('expiry_date', 'id')
         if chosen_lot_id is not None:
             fefo_query = fefo_query.exclude(id=chosen_lot_id)
+            # Aplicar filtro de vida útil a los lotes restantes
+            fefo_query = fefo_query.filter(expiry_date__gte=min_expiry_date)
         
         for lot in fefo_query:
             if remaining_qty <= 0:

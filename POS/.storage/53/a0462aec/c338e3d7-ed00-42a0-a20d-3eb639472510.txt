@@ -1,0 +1,34 @@
+$ curl -s http://localhost:5173/ | head -20
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <script type="module" src="/@vite/client"></script>
+
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistema POS - Autenticación y Roles</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>$ pnpm run lint
+
+
+> pos-auth-app@0.1.0 lint /workspace
+> eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore
+
+
+/workspace/src/components/Topbar.vue
+  63:1  error  Parsing error: x-invalid-end-tag  vue/no-parsing-error
+
+/workspace/src/layouts/POSLayout.vue
+  40:1  error  Parsing error: x-invalid-end-tag  vue/no-parsing-error
+
+/workspace/src/views/PosView.vue
+  179:1  error  Parsing error: x-invalid-end-tag  vue/no-parsing-error
+
+✖ 3 problems (3 errors, 0 warnings)
+
+ ELIFECYCLE  Command failed with exit code 1.

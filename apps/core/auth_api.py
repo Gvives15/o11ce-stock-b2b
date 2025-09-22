@@ -52,15 +52,8 @@ def login(request):
                           remote_addr=request.META.get('REMOTE_ADDR'))
                 
                 return JsonResponse({
-                    'access_token': str(access_token),
-                    'refresh_token': str(refresh),
-                    'user': {
-                        'id': user.id,
-                        'username': user.username,
-                        'email': user.email,
-                        'first_name': user.first_name,
-                        'last_name': user.last_name,
-                    }
+                    'access': str(access_token),
+                    'refresh': str(refresh),
                 }, status=200)
             else:
                 logger.warning("login_attempt_inactive_user", 
@@ -105,7 +98,7 @@ def refresh_token_api(request):
     """
     try:
         data = json.loads(request.body)
-        refresh_token = data.get('refresh_token')
+        refresh_token = data.get('refresh')
         
         if not refresh_token:
             return JsonResponse({
@@ -117,19 +110,22 @@ def refresh_token_api(request):
             # Crear nuevo refresh token (rotativo)
             token = RefreshToken(refresh_token)
             
+            # Obtener el usuario del token
+            user_id = token.payload['user_id']
+            user = User.objects.get(id=user_id)
+            
             # Generar nuevos tokens
-            new_refresh = RefreshToken.for_user(token.user)
+            new_refresh = RefreshToken.for_user(user)
             new_access = new_refresh.access_token
             
             # El token anterior se blacklistea automáticamente por BLACKLIST_AFTER_ROTATION
             
             logger.info("token_refresh_successful", 
-                      user_id=token.user.id,
+                      user_id=user_id,
                       remote_addr=request.META.get('REMOTE_ADDR'))
             
             return JsonResponse({
-                'access_token': str(new_access),
-                'refresh_token': str(new_refresh),
+                'access': str(new_access),
             }, status=200)
             
         except TokenError as e:
@@ -178,7 +174,7 @@ def logout_api(request):
             token.blacklist()
             
             logger.info("logout_successful", 
-                      user_id=token.user.id,
+                      user_id=token.payload['user_id'],
                       remote_addr=request.META.get('REMOTE_ADDR'))
             
             return JsonResponse({
@@ -267,36 +263,25 @@ def me(request):
                     'has_scope_analytics': scope.has_scope_analytics,
                 }
             
+            # Obtener roles del usuario según B0-BE-02
+            roles = []
+            if user.is_superuser:
+                roles = ['admin']
+            elif hasattr(user, 'scope') and hasattr(user.scope, 'roles'):
+                # Obtener roles específicos del modelo Role
+                user_roles = user.scope.roles.filter(is_active=True)
+                roles = [role.name for role in user_roles]
+            elif user.is_staff:
+                roles = ['admin']  # Staff por defecto es admin
+            else:
+                roles = []  # Usuario sin roles específicos
+
             response_data = {
                 'id': user.id,
                 'username': user.username,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'name': f"{user.first_name} {user.last_name}".strip() or user.username,
-                'is_staff': user.is_staff,
-                'is_superuser': user.is_superuser,
-                'date_joined': user.date_joined.isoformat(),
-                'last_login': user.last_login.isoformat() if user.last_login else None,
+                'roles': roles,
             }
             
-            # Agregar información del customer si existe
-            if customer:
-                response_data['segment'] = customer.segment
-                response_data['customer_id'] = customer.id
-                response_data['default_address'] = {
-                    'name': customer.name,
-                    'tax_id': customer.tax_id,
-                    'tax_condition': customer.tax_condition,
-                }
-            else:
-                response_data['segment'] = None
-                response_data['customer_id'] = None
-                response_data['default_address'] = None
-            
-            # Agregar scope si existe
-            if user_scope:
-                response_data['scope'] = user_scope
             
             logger.info("me_endpoint_successful", 
                       user_id=user.id,
@@ -311,15 +296,11 @@ def me(request):
                        error=str(e),
                        remote_addr=request.META.get('REMOTE_ADDR'))
             # Devolver información básica del usuario en caso de error
+            roles = ['admin'] if user.is_superuser else []
             return JsonResponse({
                 'id': user.id,
                 'username': user.username,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'name': f"{user.first_name} {user.last_name}".strip() or user.username,
-                'segment': None,
-                'default_address': None,
+                'roles': roles,
             }, status=200)
             
     except Exception as e:

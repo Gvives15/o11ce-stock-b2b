@@ -1,0 +1,48 @@
+$ pnpm add lodash-es
+Progress: resolved 1, reused 0, downloaded 0, added 0
+ WARN  deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+Progress: resolved 47, reused 46, downloaded 0, added 0
+Progress: resolved 247, reused 246, downloaded 0, added 0
+ WARN  5 deprecated subdependencies found: @humanwhocodes/config-array@0.13.0, @humanwhocodes/object-schema@2.0.3, glob@7.2.3, inflight@1.0.6, rimraf@3.0.2
+Packages: +1
++
+Progress: resolved 368, reused 324, downloaded 0, added 0
+Progress: resolved 368, reused 324, downloaded 1, added 1, done
+
+dependencies:
++ lodash-es 4.17.21
+
+╭ Warning ─────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│   Ignored build scripts: esbuild, vue-demi.                                  │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+│   to run scripts.                                                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+Done in 4.6s using pnpm v10.17.0
+$ pnpm add -D @types/lodash-es
+
+Progress: resolved 1, reused 0, downloaded 0, added 0
+ WARN  deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+Progress: resolved 18, reused 17, downloaded 0, added 0
+Progress: resolved 186, reused 184, downloaded 0, added 0
+ WARN  5 deprecated subdependencies found: @humanwhocodes/config-array@0.13.0, @humanwhocodes/object-schema@2.0.3, glob@7.2.3, inflight@1.0.6, rimraf@3.0.2
+Packages: +2
+++
+Progress: resolved 370, reused 325, downloaded 1, added 0
+Progress: resolved 370, reused 325, downloaded 1, added 1
+Progress: resolved 370, reused 325, downloaded 2, added 2, done
+
+devDependencies:
++ @types/lodash-es 4.17.12
+
+╭ Warning ─────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│   Ignored build scripts: esbuild, vue-demi.                                  │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+│   to run scripts.                                                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+Done in 5.1s using pnpm v10.17.0

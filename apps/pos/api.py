@@ -13,6 +13,8 @@ from django.conf import settings
 import uuid
 
 from apps.catalog.models import Product
+from apps.catalog.utils import normalize_qty
+from apps.catalog.pricing import price_quote
 from apps.stock.models import StockLot, Movement
 from apps.stock.services import allocate_lots_fefo, record_exit_fefo, StockError, ExitError
 from apps.customers.models import Customer
@@ -488,5 +490,157 @@ def export_sale_lots_csv(request, sale_id: str):
     # Preparar respuesta
     response = HttpResponse(output.getvalue(), content_type='text/csv')
     response['Content-Disposition'] = f'attachment; filename="sale_{sale_id}_lots.csv"'
-    
     return response
+
+
+# ============================================================================
+# SCHEMAS PARA PRICE QUOTE
+# ============================================================================
+
+class PriceQuoteItemIn(Schema):
+    """Schema para ítem en solicitud de cotización."""
+    product_id: int
+    qty: Decimal
+    unit: str  # "unit" o "package"
+
+
+class PriceQuoteIn(Schema):
+    """Schema para solicitud de cotización de precios."""
+    customer_id: int
+    items: List[PriceQuoteItemIn]
+
+
+class PriceQuoteItemOut(Schema):
+    """Schema para ítem en respuesta de cotización."""
+    product_id: int
+    name: str
+    qty: Decimal
+    unit_price: Decimal
+    discount_item: Decimal
+    subtotal: Decimal
+
+
+class ComboDiscountOut(Schema):
+    """Schema para descuento de combo."""
+    name: str
+    description: str
+    discount_amount: Decimal
+    items_affected: List[str]
+
+
+class PriceQuoteOut(Schema):
+    """Schema para respuesta de cotización de precios."""
+    items: List[PriceQuoteItemOut]
+    combo_discounts: List[ComboDiscountOut]
+    subtotal: Decimal
+    discounts_total: Decimal
+    total: Decimal
+
+
+@router.post("/price-quote", response={200: PriceQuoteOut, 400: ErrorOut, 404: ErrorOut})
+def get_price_quote(request, data: PriceQuoteIn):
+    """
+    Endpoint para obtener cotización de precios con beneficios aplicados.
+    
+    Usa normalize_qty para conversión de unidades y el motor de pricing
+    para aplicar descuentos por segmento y combos.
+    """
+    try:
+        # Validaciones de hardening
+        if not data.items:
+            raise HttpError(400, "Debe incluir al menos un item")
+        
+        if len(data.items) > 50:
+            raise HttpError(400, "Máximo 50 items permitidos por cotización")
+        
+        # Validar cantidades positivas
+        for item in data.items:
+            if item.qty <= 0:
+                raise HttpError(400, f"La cantidad debe ser mayor a 0 para el producto {item.product_id}")
+        
+        # Obtener cliente
+        try:
+            customer = Customer.objects.get(id=data.customer_id)
+        except Customer.DoesNotExist:
+            raise HttpError(404, "Cliente no encontrado")
+        
+        # Preparar items para el motor de pricing
+        items_data = []
+        original_items = {}  # Para mantener las cantidades originales convertidas
+        for item in data.items:
+            try:
+                product = Product.objects.get(id=item.product_id)
+            except Product.DoesNotExist:
+                raise HttpError(404, f"Producto {item.product_id} no encontrado")
+            
+            # Validar cantidad usando normalize_qty (para verificar que es válida)
+            try:
+                normalize_qty(product, item.qty, item.unit)
+            except ValueError as e:
+                raise HttpError(400, f"Error en cantidad para producto {product.code}: {str(e)}")
+            
+            # Guardar cantidad original para la respuesta
+            original_items[product.id] = item.qty
+            
+            # Convertir cantidad para el motor de pricing si es necesario
+            if item.unit == 'unit' and product.pack_size:
+                # Si se envían unidades, convertir a paquetes para pricing
+                converted_qty = item.qty / Decimal(str(product.pack_size))
+            elif item.unit == 'package':
+                # Si se envían paquetes, mantener como paquetes
+                converted_qty = item.qty
+            else:
+                # Para otros casos, mantener la cantidad original
+                converted_qty = item.qty
+            
+            # Pasar cantidad convertida al motor de pricing
+            items_data.append({
+                'product_id': product.id,
+                'quantity': converted_qty
+            })
+        
+        # Usar el motor de pricing para calcular precios con beneficios
+        quote = price_quote(customer, items_data)
+        
+        # Formatear respuesta según especificación
+        response_items = []
+        for pricing_item in quote.items:
+            # Calcular descuento individual (diferencia entre precio original y con descuento)
+            original_price = pricing_item.product.price
+            discount_per_unit = original_price - pricing_item.unit_price
+            discount_item = discount_per_unit * pricing_item.quantity
+            
+            response_items.append(PriceQuoteItemOut(
+                product_id=pricing_item.product.id,
+                name=pricing_item.product.name,
+                qty=original_items[pricing_item.product.id],  # Usar cantidad original
+                unit_price=pricing_item.unit_price,
+                discount_item=discount_item,
+                subtotal=pricing_item.subtotal
+            ))
+        
+        # Formatear combo discounts
+        combo_discounts = []
+        for combo in quote.combo_discounts:
+            combo_discounts.append(ComboDiscountOut(
+                name=combo.name,
+                description=combo.description,
+                discount_amount=combo.discount_amount,
+                items_affected=combo.items_affected
+            ))
+        
+        # Calcular totales según DoD: totales = suma ítems − descuentos
+        discounts_total = quote.segment_discount_amount + quote.total_combo_discount
+        
+        return PriceQuoteOut(
+            items=response_items,
+            combo_discounts=combo_discounts,
+            subtotal=quote.subtotal,
+            discounts_total=discounts_total,
+            total=quote.total
+        )
+        
+    except HttpError:
+         raise
+    except Exception as e:
+         raise HttpError(400, f"Error procesando cotización: {str(e)}")

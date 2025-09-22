@@ -1,0 +1,109 @@
+$ pnpm add lodash-es
+Progress: resolved 1, reused 0, downloaded 0, added 0
+ WARN  deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+Progress: resolved 47, reused 46, downloaded 0, added 0
+Progress: resolved 247, reused 246, downloaded 0, added 0
+ WARN  5 deprecated subdependencies found: @humanwhocodes/config-array@0.13.0, @humanwhocodes/object-schema@2.0.3, glob@7.2.3, inflight@1.0.6, rimraf@3.0.2
+Packages: +1
++
+Progress: resolved 368, reused 324, downloaded 0, added 0
+Progress: resolved 368, reused 324, downloaded 1, added 1, done
+
+dependencies:
++ lodash-es 4.17.21
+
+╭ Warning ─────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│   Ignored build scripts: esbuild, vue-demi.                                  │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+│   to run scripts.                                                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+Done in 4.6s using pnpm v10.17.0
+$ pnpm add -D @types/lodash-es
+
+Progress: resolved 1, reused 0, downloaded 0, added 0
+ WARN  deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+Progress: resolved 18, reused 17, downloaded 0, added 0
+Progress: resolved 186, reused 184, downloaded 0, added 0
+ WARN  5 deprecated subdependencies found: @humanwhocodes/config-array@0.13.0, @humanwhocodes/object-schema@2.0.3, glob@7.2.3, inflight@1.0.6, rimraf@3.0.2
+Packages: +2
+++
+Progress: resolved 370, reused 325, downloaded 1, added 0
+Progress: resolved 370, reused 325, downloaded 1, added 1
+Progress: resolved 370, reused 325, downloaded 2, added 2, done
+
+devDependencies:
++ @types/lodash-es 4.17.12
+
+╭ Warning ─────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│   Ignored build scripts: esbuild, vue-demi.                                  │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+│   to run scripts.                                                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+Done in 5.1s using pnpm v10.17.0
+$ pnpm run lint
+
+
+> pos-auth-app@0.1.0 lint /workspace
+> eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore
+
+
+/workspace/src/components/Cart.vue
+  106:10  error  'computed' is defined but never used                                     @typescript-eslint/no-unused-vars
+  128:7   error  'props' is assigned a value but never used                               @typescript-eslint/no-unused-vars
+  163:66  error  'index' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  196:1   error  Parsing error: x-invalid-end-tag                                         vue/no-parsing-error
+
+/workspace/src/components/CustomerPicker.vue
+  142:1  error  Parsing error: x-invalid-end-tag  vue/no-parsing-error
+
+/workspace/src/components/TotalsPanel.vue
+   85:15  error  'computed' is defined but never used  @typescript-eslint/no-unused-vars
+  199:1   error  Parsing error: x-invalid-end-tag      vue/no-parsing-error
+
+/workspace/src/composables/useQuote.ts
+  1:25  error  'watch' is defined but never used        @typescript-eslint/no-unused-vars
+  3:8   error  'axiosClient' is defined but never used  @typescript-eslint/no-unused-vars
+
+/workspace/src/views/PosView.vue
+  334:1  error  Parsing error: x-invalid-end-tag  vue/no-parsing-error
+
+✖ 10 problems (10 errors, 0 warnings)
+
+ ELIFECYCLE  Command failed with exit code 1.
+$ pnpm run lint
+
+
+> pos-auth-app@0.1.0 lint /workspace
+> eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore
+
+$ pnpm run build
+
+
+> pos-auth-app@0.1.0 build /workspace
+> vite build
+
+vite v5.4.20 building for production...
+transforming...
+✓ 707 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                                         0.48 kB │ gzip:  0.32 kB
+dist/assets/PosView-C9D6cJ9s.css                                        0.40 kB │ gzip:  0.17 kB
+dist/assets/POSLayout-LnuaBlpU.css                                      1.65 kB │ gzip:  0.53 kB
+dist/assets/index-4x-zacSY.css                                         25.68 kB │ gzip:  5.10 kB
+dist/assets/_plugin-vue_export-helper-DlAUqK2U.js                       0.09 kB │ gzip:  0.10 kB
+dist/assets/POSLayout-h92Pv85a.js                                       0.18 kB │ gzip:  0.17 kB
+dist/assets/DeniedView-BLQjdSMB.js                                      2.78 kB │ gzip:  1.30 kB
+dist/assets/LoginView-ByEQ_f1Y.js                                       4.05 kB │ gzip:  1.70 kB
+dist/assets/POSLayout.vue_vue_type_script_setup_true_lang-CyZOzU1I.js   5.65 kB │ gzip:  2.51 kB
+dist/assets/HistoryView-cqpJTSSs.js                                     6.65 kB │ gzip:  2.30 kB
+dist/assets/SettingsView-CBfPgmsh.js                                    8.51 kB │ gzip:  2.84 kB
+dist/assets/PosView-RqqUrUo7.js                                        28.78 kB │ gzip:  9.87 kB
+dist/assets/index-CiERWFnX.js                                          99.77 kB │ gzip: 39.13 kB
+✓ built in 3.60s
