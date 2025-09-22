@@ -1,5 +1,5 @@
 {
-  "timeline_index": 140,
+  "timeline_index": 145,
   "planner": {
     "Team Leader": {
       "1": {
@@ -15,7 +15,7 @@
         "start_at": 1758506236.151208,
         "end_at": 1758506682.7046332
       },
-      "current_task_id": "B2-FE-T2",
+      "current_task_id": "VITE-LAN-01",
       "2": {
         "task_id": "2",
         "dependent_task_ids": [],
@@ -93,7 +93,8 @@
         "is_success": false,
         "is_finished": false,
         "assignee": "Alex",
-        "start_at": 1758514158.9960241
+        "start_at": 1758514158.9960241,
+        "end_at": 1758514905.3239186
       },
       "B2-FE-T3": {
         "task_id": "B2-FE-T3",
@@ -184,6 +185,19 @@
         "is_success": false,
         "is_finished": false,
         "assignee": "Alex"
+      },
+      "VITE-LAN-01": {
+        "task_id": "VITE-LAN-01",
+        "dependent_task_ids": [],
+        "instruction": "Exponer Vite en LAN y fijar puerto. 1) Crear/editar el archivo `vite.config.ts` en la raíz del proyecto con exactamente este contenido: export default { server: { host: true, port: 5173, strictPort: true } }. 2) Guardar cambios. 3) Ejecutar: `pnpm run dev`. DoD: El servidor arranca sin errores, en la consola aparece una URL de red del tipo: http://192.168.x.x:5173/, desde otro dispositivo en la misma red se accede correctamente a la app usando esa IP y puerto.",
+        "task_type": "general",
+        "code": "",
+        "result": "",
+        "is_success": false,
+        "is_finished": true,
+        "assignee": "Alex",
+        "start_at": 1758514905.3239276,
+        "end_at": 1758514947.1157503
       }
     }
   },
@@ -328,7 +342,12 @@
     "137": 1,
     "138": 1,
     "139": 1,
-    "140": 0
+    "140": 0,
+    "141": 1,
+    "142": 1,
+    "143": 1,
+    "144": 0,
+    "145": 1
   },
   "preview_servers": {},
   "preview_server": null,
