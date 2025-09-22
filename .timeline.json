@@ -1,5 +1,5 @@
 {
-  "timeline_index": 41,
+  "timeline_index": 59,
   "planner": {
     "Team Leader": {
       "1": {
@@ -13,9 +13,22 @@
         "is_finished": true,
         "assignee": "Alex",
         "start_at": 1758506236.151208,
-        "end_at": 1758506551.3452387
+        "end_at": 1758506682.7046332
       },
-      "current_task_id": "1"
+      "current_task_id": "2",
+      "2": {
+        "task_id": "2",
+        "dependent_task_ids": [],
+        "instruction": "Implement B0-FE-02 - Menu and Banners system with role-based navigation and operational state management.\n\n**Tasks to implement:**\n\n1. **Menu model and role mapping** - Create `src/config/menu.ts` exporting MENU_ITEMS with `{id, label, icon, route, roles: string[]}`. Items:\n   - venta (/pos) → roles ['vendedor_caja','admin']\n   - historial (/history) → roles ['vendedor_caja','admin'] \n   - config (/settings) → roles ['admin']\n\n2. **Operations/state store** - Create `src/stores/ops.ts` (Pinia) with state: `hasShiftOpen: boolean`, `hasCashboxOpen: boolean`, `offline: boolean`. Actions: `setShift(open: boolean)`, `setCashbox(open: boolean)`, `setOffline(flag: boolean)`. Listen to window events 'online'/'offline' and update offline state.\n\n3. **Sidebar component with role filtering** - Create `src/components/Sidebar.vue` that:\n   - Imports MENU_ITEMS\n   - Reads roles from useAuth() (Pinia)\n   - Filters MENU_ITEMS by `item.roles.some(r => roles.includes(r))`\n   - Renders list with `<RouterLink>` and Tailwind classes ('active' based on route)\n\n4. **Simple Topbar** - Create `src/components/Topbar.vue` with view title (prop) and status indicator: if offline → badge 'Offline'; else 'Online'.\n\n5. **Global Banners** - Create `src/components/GlobalBanners.vue` that reads useOps() and shows in severity order:\n   - If offline → red banner: 'Sin conexión: modo lectura'\n   - Else if !hasShiftOpen → amber banner: 'No hay turno abierto'\n   - Else if !hasCashboxOpen → amber banner: 'Caja cerrada'\n\n6. **Integrate components in layout** - Update `src/layouts/POSLayout.vue` to include `<Sidebar/>`, `<Topbar/>` and `<GlobalBanners/>` before `<router-view/>`. Use CSS grid/flex with Tailwind.\n\n7. **Critical action blocking** - Create composable `src/composables/useBlockers.ts` that exposes:\n   - `canCheckout = computed(() => !ops.offline && ops.hasShiftOpen && ops.hasCashboxOpen)`\n   - Helpers for tooltips/messages\n   - Use in PosView.vue to disable \"Cobrar\" button and show reason\n\n8. **Visual styling** - Apply Tailwind:\n   - Sidebar: fixed width, items with hover:bg-muted and aria-current\n   - Banners: red for offline (bg-red-100 text-red-800), amber for shift/cashbox (bg-amber-100 text-amber-800)\n   - Disabled button: opacity-50 cursor-not-allowed\n\n9. **Unit tests** - Add tests:\n   - Sidebar: with roles=['vendedor_caja'] renders 2 items; with ['admin'] renders 3\n   - Blockers: canCheckout is false if offline=true or !hasShiftOpen or !hasCashboxOpen\n\n10. **Online/offline listeners** - In main.ts, when mounting app: `ops.setOffline(!navigator.onLine)`. Add global window listeners to update offline state.\n\n11. **README section** - Update README.md: how to set hasShiftOpen and hasCashboxOpen from future cashbox screens; how to test offline (disconnect network).\n\n**Acceptance Criteria:**\n- Menu shows/hides based on role (vendedor vs admin)\n- Banners appear correctly in severity order: Offline / No shift / Cashbox closed\n- \"Cobrar\" button disables when any critical flag prevents it, with clear message\n- Simple and readable Tailwind styles\n- Offline detection works automatically\n\n**File Structure:**\n```\nsrc/\n  config/menu.ts\n  stores/ops.ts\n  components/\n    Sidebar.vue\n    Topbar.vue\n    GlobalBanners.vue\n  composables/\n    useBlockers.ts\n  layouts/POSLayout.vue (updated)\n  views/PosView.vue (updated)\n```\n\nUse Vue 3 Composition API, TypeScript, and ensure proper integration with existing auth system.",
+        "task_type": "general",
+        "code": "",
+        "result": "",
+        "is_success": false,
+        "is_finished": true,
+        "assignee": "Alex",
+        "start_at": 1758506682.7046413,
+        "end_at": 1758506891.6560676
+      }
     }
   },
   "gallery_last_file": {},
@@ -60,7 +73,25 @@
     "38": 1,
     "39": 0,
     "40": 1,
-    "41": 1
+    "41": 1,
+    "42": 1,
+    "43": 1,
+    "44": 1,
+    "45": 1,
+    "46": 1,
+    "47": 1,
+    "48": 1,
+    "49": 1,
+    "50": 1,
+    "51": 1,
+    "52": 1,
+    "53": 1,
+    "54": 1,
+    "55": 1,
+    "56": 1,
+    "57": 1,
+    "58": 1,
+    "59": 1
   },
   "preview_servers": {},
   "preview_server": null,
