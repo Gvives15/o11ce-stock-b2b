@@ -1,131 +1,116 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import NProgress from 'nprogress'
-
-const routes: RouteRecordRaw[] = [
-  {
-    path: '/login',
-    name: 'login',
-    component: () => import('@/views/LoginView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'Iniciar Sesión'
-    }
-  },
-  {
-    path: '/denied',
-    name: 'denied',
-    component: () => import('@/views/DeniedView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'Acceso Denegado'
-    }
-  },
-  {
-    path: '/pos',
-    name: 'pos',
-    component: () => import('@/views/PosView.vue'),
-    meta: {
-      requiresAuth: true,
-      roles: ['vendedor_caja', 'admin'],
-      title: 'Punto de Venta',
-      layout: 'pos'
-    }
-  },
-  {
-    path: '/history',
-    name: 'history',
-    component: () => import('@/views/HistoryView.vue'),
-    meta: {
-      requiresAuth: true,
-      roles: ['vendedor_caja', 'admin'],
-      title: 'Historial de Ventas',
-      layout: 'pos'
-    }
-  },
-  {
-    path: '/settings',
-    name: 'settings',
-    component: () => import('@/views/SettingsView.vue'),
-    meta: {
-      requiresAuth: true,
-      roles: ['admin'],
-      title: 'Configuración POS',
-      layout: 'pos'
-    }
-  },
-  {
-    path: '/',
-    redirect: '/pos'
-  },
-  {
-    path: '/:pathMatch(.*)*',
-    redirect: '/pos'
-  }
-]
+import { showToast } from '@/lib/errorToast'
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes: [
+    {
+      path: '/',
+      redirect: '/pos'
+    },
+    {
+      path: '/login',
+      name: 'Login',
+      component: () => import('@/views/LoginView.vue'),
+      meta: { requiresAuth: false }
+    },
+    {
+      path: '/denied',
+      name: 'Denied',
+      component: () => import('@/views/DeniedView.vue'),
+      meta: { requiresAuth: false }
+    },
+    {
+      path: '/',
+      component: () => import('@/layouts/POSLayout.vue'),
+      meta: { requiresAuth: true },
+      children: [
+        {
+          path: 'pos',
+          name: 'POS',
+          component: () => import('@/views/PosView.vue'),
+          meta: { 
+            requiresAuth: true,
+            allowedRoles: ['vendedor_caja', 'admin']
+          }
+        },
+        {
+          path: 'history',
+          name: 'History',
+          component: () => import('@/views/HistoryView.vue'),
+          meta: { 
+            requiresAuth: true,
+            allowedRoles: ['vendedor_caja', 'admin']
+          }
+        },
+        {
+          path: 'settings',
+          name: 'Settings',
+          component: () => import('@/views/SettingsView.vue'),
+          meta: { 
+            requiresAuth: true,
+            allowedRoles: ['admin']
+          }
+        }
+      ]
+    }
+  ]
 })
 
 // Global navigation guard
 router.beforeEach(async (to, from, next) => {
-  NProgress.start()
-  
   const authStore = useAuthStore()
-  const requiresAuth = to.meta?.requiresAuth
-
-  // Update document title
-  if (to.meta?.title) {
-    document.title = `${to.meta.title} - Sistema POS`
-  }
-
-  // If route doesn't require auth, allow access
-  if (!requiresAuth) {
-    next()
-    return
-  }
-
-  // Check if user has token
-  if (!authStore.tokenAccess) {
-    next({
-      name: 'login',
-      query: { redirect: to.fullPath }
-    })
-    return
-  }
-
-  // Load profile if not loaded yet
-  if (!authStore.profileLoaded) {
-    try {
-      await authStore.loadProfile()
-    } catch (error) {
-      // If profile loading fails, logout and redirect to login
-      authStore.logout()
-      next({
-        name: 'login',
-        query: { redirect: to.fullPath }
-      })
-      return
+  
+  // Check if route requires authentication
+  if (to.meta.requiresAuth) {
+    // Check if user has access token
+    if (!authStore.getAccess()) {
+      showToast('Debes iniciar sesión', 'warning')
+      return next('/login')
+    }
+    
+    // Load user profile if not already loaded
+    if (!authStore.user) {
+      try {
+        await authStore.loadProfile()
+      } catch (error) {
+        showToast('Sesión inválida', 'error')
+        return next('/login')
+      }
+    }
+    
+    // Check role-based access
+    if (to.meta.allowedRoles) {
+      const allowedRoles = to.meta.allowedRoles as string[]
+      const userRoles = authStore.roles
+      
+      const hasAccess = allowedRoles.some(role => userRoles.includes(role))
+      
+      if (!hasAccess) {
+        return next('/denied')
+      }
     }
   }
-
-  // Check role permissions
-  const allowedRoles = (to.meta?.roles || []) as string[]
-  if (allowedRoles.length > 0) {
-    const hasPermission = authStore.hasAnyRole(allowedRoles)
-    if (!hasPermission) {
-      next({ name: 'denied' })
-      return
-    }
+  
+  // Redirect authenticated users away from login
+  if (to.path === '/login' && authStore.isAuthenticated) {
+    return next('/pos')
   }
-
+  
   next()
 })
 
-router.afterEach(() => {
-  NProgress.done()
-})
+// Listen for logout events from interceptor
+if (typeof window !== 'undefined') {
+  window.addEventListener('auth:logout', () => {
+    const authStore = useAuthStore()
+    if (authStore.isAuthenticated) {
+      authStore.logout()
+      router.push('/login')
+      showToast('Sesión expirada', 'warning')
+    }
+  })
+}
 
 export default router

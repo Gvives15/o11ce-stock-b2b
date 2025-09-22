@@ -1,6 +1,6 @@
 # Sistema POS - Autenticación y Roles
 
-Una aplicación Vue.js completa para punto de venta con autenticación, control de acceso por roles, y manejo de estado operacional.
+Una aplicación Vue.js completa para punto de venta con autenticación, control de acceso por roles, manejo de estado operacional, e interceptores HTTP robustos.
 
 ## Características
 
@@ -25,6 +25,13 @@ Una aplicación Vue.js completa para punto de venta con autenticación, control 
 - **Detección automática** de estado online/offline
 - **Bloqueo de acciones críticas** cuando no se puede operar
 
+### Interceptores HTTP y Manejo de Errores
+- **Refresh automático de tokens** en caso de expiración (401)
+- **Cola de requests** para evitar múltiples refresh simultáneos
+- **Toasts user-friendly** para todos los errores HTTP
+- **Logout automático** si el refresh token es inválido
+- **Protección contra bucles** de refresh infinitos
+
 ### Funcionalidades POS
 - **Punto de Venta** con carrito de compras
 - **Historial de Ventas** con filtros y estadísticas
@@ -36,6 +43,13 @@ Una aplicación Vue.js completa para punto de venta con autenticación, control 
 ```
 Vendedor Caja: vendedor@pos.com / password123
 Admin:         admin@pos.com / admin123
+```
+
+## Variables de Entorno
+
+```bash
+# .env
+VITE_API_BASE_URL=http://localhost:3000/api
 ```
 
 ## Instalación y Uso
@@ -52,6 +66,9 @@ pnpm run build
 
 # Linting
 pnpm run lint
+
+# Tests unitarios
+pnpm run test
 ```
 
 ## Estructura del Proyecto
@@ -61,11 +78,16 @@ src/
 ├── components/          # Componentes reutilizables
 │   ├── Sidebar.vue     # Navegación lateral con filtrado por rol
 │   ├── Topbar.vue      # Barra superior con estado
-│   └── GlobalBanners.vue # Banners de estado operacional
+│   ├── GlobalBanners.vue # Banners de estado operacional
+│   └── InterceptorDemo.vue # Demo de interceptores HTTP
 ├── composables/         # Lógica reutilizable
 │   └── useBlockers.ts  # Bloqueo de acciones por estado
 ├── config/             # Configuraciones
 │   └── menu.ts         # Definición de menú y roles
+├── lib/                # Librerías y utilidades
+│   ├── axiosClient.ts  # Cliente HTTP con interceptores
+│   ├── authRefresh.ts  # Cola de refresh de tokens
+│   └── errorToast.ts   # Manejo de errores y toasts
 ├── layouts/            # Layouts de página
 │   └── POSLayout.vue   # Layout principal del sistema
 ├── stores/             # Estado global (Pinia)
@@ -73,6 +95,62 @@ src/
 │   └── ops.ts          # Estado operacional
 ├── views/              # Páginas principales
 └── router/             # Configuración de rutas
+```
+
+## Interceptores HTTP
+
+### Flujo de Refresh Automático
+
+```
+Request → 401 token_expired → POST /auth/refresh → Retry original request
+                            ↓
+                         Si falla → logout() → /login + toast "Sesión expirada"
+```
+
+### Manejo de Errores
+
+El sistema mapea automáticamente errores HTTP a mensajes user-friendly:
+
+| Código | Mensaje |
+|--------|---------|
+| **401** | "Credenciales inválidas" |
+| **403** | "Acceso denegado" |
+| **404** | "Recurso no encontrado" |
+| **409** | "Conflicto - No se pudo completar la acción" |
+| **429** | "Demasiadas solicitudes - Intenta más tarde" |
+| **5xx** | "Error del servidor" |
+| **Network** | "Sin conexión a internet" |
+
+### Protecciones de Seguridad
+
+- **Anti-loops**: No refrescar si el endpoint es `/auth/refresh`
+- **Límite de reintentos**: Máximo 1 reintento por request
+- **Cola de requests**: Un solo refresh por vez, múltiples requests en cola
+- **Timeout**: 15 segundos por request
+
+### Testear Interceptores
+
+1. **Ir a Configuración** (solo admin)
+2. **Usar el panel "Demo de Interceptores HTTP"**
+3. **Probar diferentes escenarios**:
+   - Token expirado → refresh automático
+   - Múltiples requests concurrentes → un solo refresh
+   - Refresh inválido → logout automático
+   - Errores 403, 409, red → toasts apropiados
+
+### Debugging
+
+```javascript
+// Ver estado de tokens en consola
+const authStore = useAuthStore()
+console.log('Access:', authStore.getAccess())
+console.log('Refresh:', authStore.getRefresh())
+
+// Simular token expirado
+authStore.setToken('expired_token')
+
+// Invalidar refresh token
+authStore.setRefresh('invalid_refresh')
 ```
 
 ## Manejo de Estado Operacional
@@ -138,7 +216,8 @@ Los botones bloqueados muestran:
 - **Pinia** para manejo de estado
 - **Tailwind CSS** para estilos
 - **Vite** para build y desarrollo
-- **Axios** para peticiones HTTP
+- **Axios** para peticiones HTTP con interceptores
+- **Vitest** para tests unitarios
 
 ## Desarrollo
 
@@ -176,15 +255,104 @@ const { canCheckout, checkoutBlockReason } = useBlockers()
 </button>
 ```
 
+### Agregar Interceptores Personalizados
+
+```typescript
+import axiosClient from '@/lib/axiosClient'
+
+// Request interceptor
+axiosClient.interceptors.request.use(config => {
+  // Lógica personalizada
+  return config
+})
+
+// Response interceptor
+axiosClient.interceptors.response.use(
+  response => response,
+  error => {
+    // Manejo de errores personalizado
+    return Promise.reject(error)
+  }
+)
+```
+
 ## Testing
 
-El sistema incluye un panel de pruebas en la vista POS para simular diferentes estados operacionales sin necesidad de configuración externa.
+### Tests Unitarios
+
+```bash
+# Ejecutar tests
+pnpm run test
+
+# Tests en modo watch
+pnpm run test --watch
+
+# Coverage
+pnpm run test --coverage
+```
+
+### Tests de Interceptores
+
+El sistema incluye tests para validar:
+- Refresh automático en 401
+- Cola de requests concurrentes
+- Mapeo de errores HTTP
+- Logout automático en refresh inválido
+
+### Testing Manual
+
+El sistema incluye un panel de pruebas en la vista de Configuración para simular diferentes estados operacionales y escenarios de interceptores sin necesidad de configuración externa.
+
+## Troubleshooting
+
+### Problemas Comunes
+
+**1. Bucle infinito de refresh**
+- Verificar que el endpoint `/auth/refresh` esté excluido
+- Revisar flag `__isRetry` en requests
+
+**2. Tokens no se actualizan**
+- Verificar que `localStorage` esté disponible
+- Revisar permisos del navegador
+
+**3. Toasts no aparecen**
+- Verificar que el contenedor de toasts se cree correctamente
+- Revisar z-index del contenedor
+
+**4. Logout automático no funciona**
+- Verificar que el evento `auth:logout` se dispare
+- Revisar listener en router
+
+### Logs de Debug
+
+```javascript
+// Habilitar logs de axios
+import axiosClient from '@/lib/axiosClient'
+
+axiosClient.interceptors.request.use(config => {
+  console.log('Request:', config)
+  return config
+})
+
+axiosClient.interceptors.response.use(
+  response => {
+    console.log('Response:', response)
+    return response
+  },
+  error => {
+    console.log('Error:', error)
+    return Promise.reject(error)
+  }
+)
+```
 
 ## Próximas Mejoras
 
-- [ ] Tests unitarios automatizados
+- [ ] Tests E2E con Playwright
 - [ ] Persistencia de estado en localStorage
-- [ ] Notificaciones toast
+- [ ] Notificaciones push
 - [ ] Modo oscuro
 - [ ] PWA (Progressive Web App)
 - [ ] Sincronización offline
+- [ ] Métricas de rendimiento
+- [ ] Logs centralizados

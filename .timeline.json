@@ -1,5 +1,5 @@
 {
-  "timeline_index": 59,
+  "timeline_index": 82,
   "planner": {
     "Team Leader": {
       "1": {
@@ -15,7 +15,7 @@
         "start_at": 1758506236.151208,
         "end_at": 1758506682.7046332
       },
-      "current_task_id": "2",
+      "current_task_id": "3",
       "2": {
         "task_id": "2",
         "dependent_task_ids": [],
@@ -27,7 +27,20 @@
         "is_finished": true,
         "assignee": "Alex",
         "start_at": 1758506682.7046413,
-        "end_at": 1758506891.6560676
+        "end_at": 1758507014.124455
+      },
+      "3": {
+        "task_id": "3",
+        "dependent_task_ids": [],
+        "instruction": "Implement B0-FE-03 - HTTP Interceptor and Error Handling system with automatic token refresh and user-friendly error management.\n\n**Tasks to implement:**\n\n1. **Create axiosClient** - Create `src/lib/axiosClient.ts` export default axios instance with `baseURL` (from `.env`), `timeout=15000`.\n\n2. **Token utility and store** - In `src/stores/auth.ts`, expose `getAccess()` and `getRefresh()` (if stored), and `setToken(access)`, `setRefresh(refresh?)`, `logout()`.\n\n3. **Request interceptor (Authorization)** - In `axiosClient.ts`, add `axios.interceptors.request.use` that if `auth.getAccess()` exists, add header `Authorization: Bearer <token>`.\n\n4. **Refresh queue (avoid race conditions)** - In `src/lib/authRefresh.ts`, implement:\n   - `let isRefreshing=false; let pendingRequests: ((token:string)=>void)[]=[]`\n   - `enqueue(cb)` and `resolveAll(newToken)`\n   - Export helpers for interceptor use\n\n5. **Response interceptor (401 → refresh)** - In `axiosClient.ts` `interceptors.response.use`:\n   - If response is 401 and error indicates `token_expired`:\n     - If `!isRefreshing`: set `isRefreshing=true`; `POST /auth/refresh` with `refresh` from store\n     - On success: `auth.setToken(newAccess)`; `resolveAll(newAccess)`; retry original request\n     - On failure: `auth.logout()` and reject\n   - If refresh already in progress: `enqueue(token=> retry original req with new token)`\n\n6. **Error normalizer + toasts** - Create `src/lib/errorToast.ts`:\n   - `mapErrorToMessage(err)` → short string (e.g., 401 invalid credentials, 403 access denied, 409 conflict, 5xx server error, network: 'No connection')\n   - `showToast(message)` (use existing toast library)\n   - Integrate in `axiosClient` for 4xx/5xx (except refresh flow)\n\n7. **Security safeguards (anti-loops)** - Protect interceptor to **not refresh** if endpoint is already `/auth/refresh` or if original request was already retried (use flag `config.__isRetry=true`). Limit to **1** retry.\n\n8. **Integration with guard (final UX)** - In `router/index.ts` or plugin, if `auth.logout()` is triggered from interceptor, redirect to `/login` and show toast 'Session expired'.\n\n9. **Unit tests for interceptor** - Add tests (Vitest/Jest) for `axiosClient`:\n   - **401 token_expired** → makes `POST /auth/refresh`, saves `access` and **retries** `/auth/me` (200)\n   - **401 token_expired** with **2+ concurrent requests** → single refresh, both responses 200\n   - **Invalid refresh** → `logout()` called and **toast** 'Session expired'\n   - **403** → shows toast 'Access denied'\n   - **409** → shows toast 'Conflict/Could not complete action'\n   - **Network Error** → toast 'No connection'\n\n10. **README \"Interceptor & Errors\"** - Update `README.md` with: refresh flow, how to test expiration (mock 401), toast policy, and how to avoid leaks (don't log tokens).\n\n**Acceptance Criteria:**\n- Requests attach `Authorization` if token exists\n- On **401 due to expiration**, makes **refresh** once and **retries** original request\n- If **refresh fails**, does **logout** and redirects to **/login** with toast \"Session expired\"\n- 4xx/5xx and network errors show **clear toasts**\n- No **refresh loops** or multiple parallel refreshes exist\n\n**File Structure:**\n```\nsrc/\n  lib/\n    axiosClient.ts\n    authRefresh.ts\n    errorToast.ts\n  stores/auth.ts (updated)\n  router/index.ts (updated)\n```\n\n**Environment Variables:**\n- Add `VITE_API_BASE_URL` to `.env` file\n\n**Testing scenarios:**\n1. Login, force `access` expired → navigate to `/pos` → stays in view (refresh ok)\n2. Open 2 tabs and trigger fetch simultaneously with expired token → only 1 refresh\n3. Invalidate `refresh` too → when navigating, go to `/login` + toast\n4. Simulate 403 and 409 from BE → appropriate toasts\n\nUse Vue 3 Composition API, TypeScript, and ensure seamless integration with existing auth and routing systems.",
+        "task_type": "general",
+        "code": "",
+        "result": "",
+        "is_success": false,
+        "is_finished": true,
+        "assignee": "Alex",
+        "start_at": 1758507014.1244605,
+        "end_at": 1758507342.0003095
       }
     }
   },
@@ -91,7 +104,30 @@
     "56": 1,
     "57": 1,
     "58": 1,
-    "59": 1
+    "59": 1,
+    "60": 1,
+    "61": 1,
+    "62": 1,
+    "63": 1,
+    "64": 1,
+    "65": 1,
+    "66": 1,
+    "67": 1,
+    "68": 1,
+    "69": 1,
+    "70": 1,
+    "71": 1,
+    "72": 1,
+    "73": 1,
+    "74": 1,
+    "75": 1,
+    "76": 1,
+    "77": 1,
+    "78": 1,
+    "79": 1,
+    "80": 1,
+    "81": 1,
+    "82": 1
   },
   "preview_servers": {},
   "preview_server": null,
