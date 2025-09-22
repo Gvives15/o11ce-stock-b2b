@@ -1,5 +1,5 @@
 {
-  "timeline_index": 94,
+  "timeline_index": 112,
   "planner": {
     "Team Leader": {
       "1": {
@@ -15,7 +15,7 @@
         "start_at": 1758506236.151208,
         "end_at": 1758506682.7046332
       },
-      "current_task_id": "4",
+      "current_task_id": "5",
       "2": {
         "task_id": "2",
         "dependent_task_ids": [],
@@ -53,7 +53,20 @@
         "is_finished": true,
         "assignee": "Alex",
         "start_at": 1758510691.865825,
-        "end_at": 1758511068.541117
+        "end_at": 1758511965.5108037
+      },
+      "5": {
+        "task_id": "5",
+        "dependent_task_ids": [],
+        "instruction": "Implement B1 - Sales System (SearchBar + Cart + Pricing) following expert UX/UI guidelines for high-speed POS operations.\n\n**EXPERT UX/UI REQUIREMENTS:**\n\n**1. LAYOUT PRINCIPLES:**\n- **2-zone layout**: Left = Input (customer + search); Right = Execution (cart + totals + checkout)\n- **Z-reading pattern**: Title/status top → results middle → primary action (Checkout) bottom-right\n- **Performance budget**: <100ms local feedback; <400ms for quotes; spinner if >300ms\n- **Keyboard + scanner first**, touch second (44×44px targets)\n- **Clear states**: empty, loading, error, ready - nothing ambiguous\n\n**2. RESPONSIVE GRID:**\n- Desktop: `grid-cols-[1fr,0.9fr] gap-4`\n- Mobile: stack (input top, cart below, totals sticky bottom)\n- **Sticky bars**: Header (customer + search), Footer (totals + checkout button)\n\n**3. COMPONENTS TO IMPLEMENT:**\n\n**SearchBar.vue (Expert UX):**\n- Autofocus on mount\n- Debounce 250ms to `/catalog/search?q=`\n- Enter adds 1 unit of first result if list is open\n- Shortcuts: F2 focus search, ESC closes suggestions\n- Placeholder: \"Escribí código o nombre… (Ej: GAS500)\"\n- Error state: \"Sin conexión. Los precios pueden no ser exactos.\"\n\n**Cart.vue:**\n- Row layout: name (16px), SKU (12px muted), qty +/- buttons (large), unit price (small), **subtotal** (large, right-aligned)\n- Keyboard shortcuts: `+/-` keys, `DEL` removes item, `Ctrl+D` discount per item\n- Rules: minimum qty 1; if unit changes to PACK, show tooltip \"1 pack = N units\"\n- Compact density (max 6-8 visible, scroll)\n\n**useQuote.ts (Composable):**\n- Debounce 350ms; abort previous requests; cache last success 5s\n- Return: `{subtotal, discounts_total, total, combo_discounts}`\n- AbortController for canceling previous quotes\n- Fallback: keep last valid quote if server fails\n\n**TotalsPanel.vue:**\n- Order: Subtotal → Discounts (lines and combos listed) → **TOTAL**\n- Total font: 24-28px, bold, high contrast\n- Discrete animation on total change (fade/scale 100ms)\n- Toast on combo applied: \"Aplicado: Combo GAL+GAS (-$300)\"\n- Skeleton while loading; maintain last value on error\n\n**CustomerPicker.vue:**\n- Always visible top-left\n- Show segment badge (Mayorista/Minorista)\n- Changing customer triggers immediate re-quote\n\n**4. STATES & MICROCOPY (exact text):**\n- Empty cart: \"Agregá productos con el lector o buscador.\"\n- Loading quote: \"Calculando precios…\"\n- Quote error: \"No pudimos calcular los totales. Probá de nuevo.\"\n- No connection: \"Sin conexión: mostrás precios guardados. Confirmá antes de cobrar.\"\n\n**5. ACCESSIBILITY (a11y):**\n- Focus rings: `focus:outline-none focus:ring-2`\n- ARIA roles: results `role=\"listbox\"`, items `role=\"option\"`\n- Total announcements: `aria-live=\"polite\"`\n- Help shortcuts listed in \"Ayuda (F1)\"\n\n**6. ERROR HANDLING:**\n- Invalid qty: red border + inline \"Mínimo 1\"\n- Out of stock (409 error): red badge \"Falta\"\n- Limit toast spam: max 1 every 2s per type\n\n**7. PERFORMANCE & ROBUSTNESS:**\n- Cache last price-quote for 5s (same payload) to avoid flicker\n- AbortController: cancel previous quotes if user keeps typing\n- Fallback: show last valid quote if current fails\n\n**8. USAGE METRICS (events to log):**\n- `search_performed` {q, results_count, ms}\n- `item_added` {product_id, unit}\n- `qty_changed` {direction, before, after}\n- `quote_ms` {ms, items_count}\n- `combo_applied` {combo_id, amount}\n- `error_quote` {code}\n- **KPI target**: first item → total ready <3s\n\n**9. UI TOKENS:**\n- Typography: Inter, 14/16/20/28px; weights 400/600/700\n- Colors: primary (buttons/tickets), emphasis (dark on light), alerts (red/amber/green)\n- Elevation: totals panel with soft shadow; results with hover\n\n**10. ACCEPTANCE CHECKLIST:**\n- [ ] Search and add with Enter (no mouse needed)\n- [ ] Qty +/- responds without perceptible lag\n- [ ] Total reacts <400ms from change\n- [ ] Combos visible (discount line) with correct microcopy\n- [ ] Customer segment affects prices (badge + total)\n- [ ] Errors and no connection don't block sale (clear info)\n\n**TECHNICAL IMPLEMENTATION:**\n- Update existing `SearchBar.vue` with expert UX requirements\n- Create `Cart.vue`, `TotalsPanel.vue`, `CustomerPicker.vue`\n- Create `useQuote.ts` composable with debouncing and caching\n- Integrate all components in `PosView.vue` with 2-zone layout\n- Add keyboard shortcuts and accessibility features\n- Implement proper error states and loading indicators\n\n**API ENDPOINTS:**\n- `GET /catalog/search?q=<query>` - product search\n- `POST /sales/quote` - price calculation with combos\n- Customer data integration\n\nUse Vue 3 Composition API, TypeScript, and Tailwind CSS. Follow the expert UX guidelines exactly for professional POS experience.",
+        "task_type": "general",
+        "code": "",
+        "result": "",
+        "is_success": false,
+        "is_finished": true,
+        "assignee": "Alex",
+        "start_at": 1758511965.5108078,
+        "end_at": 1758512392.2174084
       }
     }
   },
@@ -152,7 +165,25 @@
     "91": 1,
     "92": 1,
     "93": 1,
-    "94": 1
+    "94": 1,
+    "95": 1,
+    "96": 1,
+    "97": 1,
+    "98": 1,
+    "99": 1,
+    "100": 1,
+    "101": 1,
+    "102": 1,
+    "103": 1,
+    "104": 1,
+    "105": 1,
+    "106": 1,
+    "107": 1,
+    "108": 1,
+    "109": 1,
+    "110": 1,
+    "111": 1,
+    "112": 1
   },
   "preview_servers": {},
   "preview_server": null,
