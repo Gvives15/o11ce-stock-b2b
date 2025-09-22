@@ -61,7 +61,8 @@ api = NinjaAPI(
     **Documentación:** Swagger UI disponible en `/docs`
     """,
     docs_url="/docs",
-    openapi_url="/openapi.json"
+    openapi_url="/openapi.json",
+    urls_namespace="main_api"
 )
 
 api.add_router("/core", core_router)

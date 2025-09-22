@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.db import transaction
 from django.contrib.auth.models import User
+from django.conf import settings
 import uuid
 
 from apps.catalog.models import Product
@@ -126,6 +127,8 @@ def create_pos_sale(request, sale_data: SaleIn):
     - Si lot_id está presente: usa ese lote específico (override)
     - Transacción atómica: todo o nada
     - Genera movimientos de salida por cada lote consumido
+    
+    FEATURE FLAG: Si FEATURE_LOT_OVERRIDE=False, ignora lot_id y usa FEFO siempre
     """
     if not sale_data.items:
         return 400, {"error": "VALIDATION_ERROR", "detail": "La venta debe tener al menos un ítem"}
@@ -168,8 +171,11 @@ def create_pos_sale(request, sale_data: SaleIn):
         if item.unit_price <= 0:
             return 400, {"error": "VALIDATION_ERROR", "detail": f"Precio unitario debe ser mayor a 0 para producto {product.name}"}
         
+        # FEATURE FLAG: Si está deshabilitado, ignorar lot_id y usar FEFO siempre
+        effective_lot_id = item.lot_id if settings.FEATURE_LOT_OVERRIDE else None
+        
         # Determinar estrategia: FEFO o Override
-        if item.lot_id is None:
+        if effective_lot_id is None:
             # FEFO automático - solo planificar
             try:
                 # VALIDACIÓN BLOQUE D: Aplicar vida útil mínima del cliente
@@ -194,19 +200,19 @@ def create_pos_sale(request, sale_data: SaleIn):
                 else:
                     return 400, {"error": e.code, "detail": str(e)}
         else:
-            # Override de lote específico
+            # Override de lote específico (solo si feature flag está habilitado)
             if not item.lot_override_reason:
                 return 400, {"error": "VALIDATION_ERROR", "detail": "lot_override_reason es requerido cuando se especifica lot_id"}
             
             # Validar que el lote existe y está disponible
             try:
                 lot = StockLot.objects.get(
-                    id=item.lot_id,
+                    id=effective_lot_id,
                     product_id=item.product_id,
                     qty_on_hand__gt=0
                 )
             except StockLot.DoesNotExist:
-                return 400, {"error": "INVALID_LOT", "detail": f"Lote {item.lot_id} no encontrado"}
+                return 400, {"error": "INVALID_LOT", "detail": f"Lote {effective_lot_id} no encontrado"}
             
             # VALIDACIÓN BLOQUE D: Verificar flags de bloqueo
             if lot.is_quarantined:
@@ -240,7 +246,7 @@ def create_pos_sale(request, sale_data: SaleIn):
                 allocation_plan = allocate_lots_fefo(
                     product=product,
                     qty_needed=item.qty,
-                    chosen_lot_id=item.lot_id,
+                    chosen_lot_id=effective_lot_id,
                     min_shelf_life_days=min_shelf_life_days
                 )
                 allocation_plans.append({

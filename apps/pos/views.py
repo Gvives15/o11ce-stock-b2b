@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
 from django.core.paginator import Paginator
 from django.db.models import Q, Sum, Count, F
+from django.conf import settings
 from apps.pos.models import SaleItemLot, LotOverrideAudit
 import csv
 import json
@@ -11,7 +12,10 @@ from datetime import datetime, timedelta
 @login_required
 def pos_interface(request):
     """Vista principal del POS - Sistema de Ventas"""
-    return render(request, 'pos/pos.html')
+    context = {
+        'feature_lot_override': settings.FEATURE_LOT_OVERRIDE
+    }
+    return render(request, 'pos/pos.html', context)
 
 @login_required
 def pos_history(request):

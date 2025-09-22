@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>POS - Sistema de Ventas</title>
+    <script>
+        // Feature flag para controlar la UI de selección de lotes
+        window.FEATURE_LOT_OVERRIDE = {{ feature_lot_override|yesno:"true,false" }};
+    </script>
     <style>
         :root {
             --primary: #3b82f6;
@@ -344,6 +348,92 @@
 
         .hidden {
             display: none !important;
+        }
+
+        /* Sistema de Notificaciones */
+        .notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            max-width: 400px;
+            pointer-events: none;
+        }
+
+        .pos-notification {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            margin-bottom: 12px;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+            pointer-events: auto;
+            border-left: 4px solid var(--gray-300);
+        }
+
+        .pos-notification-show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .pos-notification-error {
+            border-left-color: var(--danger);
+        }
+
+        .pos-notification-success {
+            border-left-color: var(--success);
+        }
+
+        .pos-notification-warning {
+            border-left-color: var(--warning);
+        }
+
+        .notification-content {
+            display: flex;
+            align-items: flex-start;
+            padding: 16px;
+            gap: 12px;
+        }
+
+        .notification-icon {
+            font-size: 1.25rem;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .notification-message {
+            flex: 1;
+            font-size: 0.875rem;
+            line-height: 1.4;
+            color: var(--gray-700);
+        }
+
+        .notification-close {
+            background: none;
+            border: none;
+            font-size: 1.25rem;
+            color: var(--gray-400);
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .notification-close:hover {
+            background: var(--gray-100);
+            color: var(--gray-600);
+        }
+
+        /* Animación de salida */
+        .pos-notification.removing {
+            opacity: 0;
+            transform: translateX(100%);
         }
     </style>
 </head>

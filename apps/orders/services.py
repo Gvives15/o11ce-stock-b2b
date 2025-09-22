@@ -9,11 +9,11 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
 
-from apps.catalog.models import Product, Benefit
 from apps.customers.models import Customer
-from apps.notifications.models import Notification
-from .models import Order, OrderItem
+from apps.orders.models import Order, OrderItem
+from apps.stock.models import Product
 from apps.stock.services import record_exit_fefo, ExitError
+from apps.catalog.models import Benefit
 
 
 TWOPLACES = Decimal("0.01")
@@ -95,6 +95,14 @@ def checkout(
     if delivery_window_from and delivery_window_to and delivery_window_from > delivery_window_to:
         raise ValidationError("delivery_window_from no puede ser mayor a delivery_window_to")
 
+    # Validación de fecha futura
+    if requested_delivery_date and requested_delivery_date <= date.today():
+        raise ValidationError("requested_delivery_date debe ser una fecha futura")
+
+    # Validación de límites máximos
+    if len(items) > 100:
+        raise ValidationError("No se pueden procesar más de 100 items por orden")
+
     customer = get_object_or_404(Customer, id=customer_id)
 
     # --- Preparar totales ---
@@ -124,8 +132,13 @@ def checkout(
     for it in items:
         pid = int(it["product_id"])
         qty = Decimal(str(it["qty"]))
+        
+        # Validaciones duras
         if qty <= 0:
             raise ValidationError(f"qty debe ser > 0 (product_id={pid})")
+        
+        if qty > 10000:
+            raise ValidationError(f"qty no puede ser mayor a 10,000 (product_id={pid})")
 
         product = get_object_or_404(Product, id=pid)
 
@@ -182,5 +195,9 @@ def checkout(
         channel=Notification.Channel.PANEL,
         payload={"order_id": order.id, "customer_id": customer_id, "total": str(order.total)},
     )
+
+    # Incrementar métrica de órdenes
+    from apps.core.metrics import increment_orders_placed
+    increment_orders_placed()
 
     return order

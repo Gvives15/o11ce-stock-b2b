@@ -1,0 +1,422 @@
+[
+    {
+        "model": "catalog.product",
+        "pk": 1,
+        "fields": {
+            "code": "CHOC90",
+            "name": "Chocolate 90% Cacao",
+            "brand": "Lindt",
+            "unit": "UN",
+            "category": "Dulces",
+            "price": "450.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "10.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 2,
+        "fields": {
+            "code": "CAFE250",
+            "name": "Café Premium 250g",
+            "brand": "La Virginia",
+            "unit": "UN",
+            "category": "Bebidas",
+            "price": "890.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "5.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 3,
+        "fields": {
+            "code": "LECHE1L",
+            "name": "Leche Entera 1L",
+            "brand": "La Serenísima",
+            "unit": "LT",
+            "category": "Lácteos",
+            "price": "320.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "20.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 4,
+        "fields": {
+            "code": "PAN500",
+            "name": "Pan Integral 500g",
+            "brand": "Bimbo",
+            "unit": "UN",
+            "category": "Panadería",
+            "price": "280.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "15.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 5,
+        "fields": {
+            "code": "ARROZ1K",
+            "name": "Arroz Largo Fino 1kg",
+            "brand": "Gallo",
+            "unit": "KG",
+            "category": "Granos",
+            "price": "420.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "25.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 6,
+        "fields": {
+            "code": "ACEITE900",
+            "name": "Aceite de Girasol 900ml",
+            "brand": "Natura",
+            "unit": "LT",
+            "category": "Aceites",
+            "price": "650.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "12.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 7,
+        "fields": {
+            "code": "YOGUR150",
+            "name": "Yogur Natural 150g",
+            "brand": "Danone",
+            "unit": "UN",
+            "category": "Lácteos",
+            "price": "180.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "30.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 8,
+        "fields": {
+            "code": "PASTA500",
+            "name": "Fideos Spaghetti 500g",
+            "brand": "Matarazzo",
+            "unit": "UN",
+            "category": "Pastas",
+            "price": "220.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "18.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 9,
+        "fields": {
+            "code": "AZUCAR1K",
+            "name": "Azúcar Común 1kg",
+            "brand": "Ledesma",
+            "unit": "KG",
+            "category": "Endulzantes",
+            "price": "380.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "20.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 10,
+        "fields": {
+            "code": "HUEVOS12",
+            "name": "Huevos Blancos x12",
+            "brand": "Granjas del Sol",
+            "unit": "UN",
+            "category": "Frescos",
+            "price": "520.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "8.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 11,
+        "fields": {
+            "code": "TOMATE1K",
+            "name": "Tomate Redondo por kg",
+            "brand": "Campo Fresco",
+            "unit": "KG",
+            "category": "Verduras",
+            "price": "290.00",
+            "tax_rate": "10.50",
+            "low_stock_threshold": "15.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 12,
+        "fields": {
+            "code": "MANZANA1K",
+            "name": "Manzana Roja por kg",
+            "brand": "Valle Verde",
+            "unit": "KG",
+            "category": "Frutas",
+            "price": "350.00",
+            "tax_rate": "10.50",
+            "low_stock_threshold": "12.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 13,
+        "fields": {
+            "code": "AGUA500",
+            "name": "Agua Mineral 500ml",
+            "brand": "Villavicencio",
+            "unit": "UN",
+            "category": "Bebidas",
+            "price": "85.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "50.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 14,
+        "fields": {
+            "code": "QUESO200",
+            "name": "Queso Cremoso 200g",
+            "brand": "Milkaut",
+            "unit": "UN",
+            "category": "Lácteos",
+            "price": "480.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "10.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 15,
+        "fields": {
+            "code": "DETERG500",
+            "name": "Detergente Líquido 500ml",
+            "brand": "Skip",
+            "unit": "UN",
+            "category": "Limpieza",
+            "price": "320.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "8.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 16,
+        "fields": {
+            "code": "GALLETAS300",
+            "name": "Galletas Dulces 300g",
+            "brand": "Bagley",
+            "unit": "UN",
+            "category": "Galletitas",
+            "price": "250.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "20.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 17,
+        "fields": {
+            "code": "CEBOLLA1K",
+            "name": "Cebolla Blanca por kg",
+            "brand": "Huerta Natural",
+            "unit": "KG",
+            "category": "Verduras",
+            "price": "180.00",
+            "tax_rate": "10.50",
+            "low_stock_threshold": "25.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 18,
+        "fields": {
+            "code": "ATUN170",
+            "name": "Atún en Aceite 170g",
+            "brand": "La Campagnola",
+            "unit": "UN",
+            "category": "Conservas",
+            "price": "420.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "15.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 19,
+        "fields": {
+            "code": "SHAMPOO400",
+            "name": "Shampoo Anticaspa 400ml",
+            "brand": "Head & Shoulders",
+            "unit": "UN",
+            "category": "Higiene",
+            "price": "680.00",
+            "tax_rate": "21.00",
+            "low_stock_threshold": "6.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 20,
+        "fields": {
+            "code": "BANANA1K",
+            "name": "Banana por kg",
+            "brand": "Tropical Fresh",
+            "unit": "KG",
+            "category": "Frutas",
+            "price": "280.00",
+            "tax_rate": "10.50",
+            "low_stock_threshold": "18.000",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.benefit",
+        "pk": 1,
+        "fields": {
+            "name": "Descuento Mayorista 10%",
+            "type": "discount",
+            "segment": "wholesale",
+            "value": "10.00",
+            "combo_spec": null,
+            "active_from": "2024-01-01",
+            "active_to": "2024-12-31",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.benefit",
+        "pk": 2,
+        "fields": {
+            "name": "Combo Chocolate 3x2",
+            "type": "combo",
+            "segment": "retail",
+            "value": null,
+            "combo_spec": {"sku": "CHOC90", "x": 3, "pay": 2},
+            "active_from": "2024-01-15",
+            "active_to": "2024-02-15",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.benefit",
+        "pk": 3,
+        "fields": {
+            "name": "Descuento Lácteos 15%",
+            "type": "discount",
+            "segment": "retail",
+            "value": "15.00",
+            "combo_spec": null,
+            "active_from": "2024-01-10",
+            "active_to": "2024-03-10",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.benefit",
+        "pk": 4,
+        "fields": {
+            "name": "Combo Café + Leche",
+            "type": "combo",
+            "segment": "wholesale",
+            "value": null,
+            "combo_spec": {"items": ["CAFE250", "LECHE1L"], "discount": 20},
+            "active_from": "2024-01-01",
+            "active_to": "2024-06-30",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    },
+    {
+        "model": "catalog.benefit",
+        "pk": 5,
+        "fields": {
+            "name": "Descuento Frutas y Verduras 8%",
+            "type": "discount",
+            "segment": "wholesale",
+            "value": "8.00",
+            "combo_spec": null,
+            "active_from": "2024-01-01",
+            "active_to": "2024-12-31",
+            "is_active": true,
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T10:30:00Z"
+        }
+    }
+]

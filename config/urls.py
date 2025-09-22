@@ -16,12 +16,17 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 from django.shortcuts import redirect
+
+from api import api
+from apps.core.health import health_live, health_ready
+from apps.core.metrics_api import metrics_endpoint
+from apps.core.views import sentry_test_error
 from apps.stock.views import stock_detail
 from apps.core.b2b_views import home as b2b_home, cart as b2b_cart, checkout as b2b_checkout
 from apps.pos.views import pos_interface, pos_history, pos_sale_detail, pos_sale_lots_csv
-
-from api import api
 
 def redirect_to_panel_login(request):
     return redirect('panel:login')
@@ -29,14 +34,34 @@ def redirect_to_panel_login(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/', api.urls),
+    
+    # Metrics endpoints
+    path('', include('django_prometheus.urls')),
+    path('api/v1/metrics/', metrics_endpoint, name='cache_metrics'),
+    
+    # Health endpoints
+    path('health/live/', health_live, name='health_live'),
+    path('health/ready/', health_ready, name='health_ready'),
+    
+    # Sentry test endpoint
+    path('sentry-test/', sentry_test_error, name='sentry_test_error'),
+    
+    # JWT Authentication API
+    path('api/v1/', include('apps.core.urls')),
+    
+    # Authentication
     path('accounts/login/', redirect_to_panel_login, name='login'),
     path('accounts/', include('django.contrib.auth.urls')),
+    
+    # Panel and POS
     path('panel/', include('apps.panel.urls')),
     path('panel/stock/<int:product_id>/', stock_detail, name='panel_stock_detail'),
     path('pos/', pos_interface, name='pos_interface'),
     path('pos/history/', pos_history, name='pos_history'),
     path('pos/sale/<str:sale_id>/', pos_sale_detail, name='pos_sale_detail'),
     path('pos/sale/<str:sale_id>/lots.csv', pos_sale_lots_csv, name='pos_sale_lots_csv'),
+    
+    # B2B
     path('b2b/', b2b_home, name='b2b_home'),
     path('b2b/cart/', b2b_cart, name='b2b_cart'),
     path('b2b/checkout/', b2b_checkout, name='b2b_checkout'),

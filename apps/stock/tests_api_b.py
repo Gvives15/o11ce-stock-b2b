@@ -19,7 +19,7 @@ class LotOptionsAPITestCase(TestCase):
     
     def setUp(self):
         """Configuración inicial para los tests"""
-        self.client = TestClient(router)
+        self.client = TestClient(router, urls_namespace="test_stock_b_api")
         
         # Crear producto de prueba
         self.product = Product.objects.create(

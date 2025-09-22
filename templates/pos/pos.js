@@ -5,6 +5,7 @@ class POSSystem {
         this.products = [];
         this.currentOverrideItem = null;
         this.API_BASE = '/api/v1';
+        this.featureLotOverride = window.FEATURE_LOT_OVERRIDE || true; // Valor por defecto
         
         this.init();
     }
@@ -14,6 +15,17 @@ class POSSystem {
         this.setupEventListeners();
         this.renderProducts();
         this.updateCartDisplay();
+        this.initNotificationSystem();
+    }
+
+    initNotificationSystem() {
+        // Crear contenedor de notificaciones si no existe
+        if (!document.getElementById('notification-container')) {
+            const container = document.createElement('div');
+            container.id = 'notification-container';
+            container.className = 'notification-container';
+            document.body.appendChild(container);
+        }
     }
 
     async loadProducts() {
@@ -144,9 +156,15 @@ class POSSystem {
 
         totalElement.textContent = `$${total.toFixed(2)}`;
 
-        // Habilitar checkout si todos los items tienen lote seleccionado
-        const allItemsHaveLots = this.cart.every(item => item.lot_id);
-        checkoutBtn.disabled = !allItemsHaveLots;
+        // Habilitar checkout según feature flag
+        if (this.featureLotOverride) {
+            // Si el feature flag está habilitado, todos los items deben tener lote seleccionado
+            const allItemsHaveLots = this.cart.every(item => item.lot_id);
+            checkoutBtn.disabled = !allItemsHaveLots;
+        } else {
+            // Si el feature flag está deshabilitado, habilitar checkout siempre que haya items
+            checkoutBtn.disabled = false;
+        }
     }
 
     renderCartItem(item) {
@@ -179,6 +197,7 @@ class POSSystem {
                         >
                     </div>
 
+                    ${this.featureLotOverride ? `
                     <div class="form-group">
                         <label class="form-label">Lote</label>
                         <select 
@@ -197,9 +216,10 @@ class POSSystem {
                             }
                         </select>
                     </div>
+                    ` : ''}
                 </div>
 
-                ${selectedLot ? `
+                ${this.featureLotOverride && selectedLot ? `
                     <div class="lot-info ${isRecommended ? 'lot-recommended' : (isOverride ? 'lot-override' : '')}">
                         <strong>${selectedLot.lot_code}</strong> - 
                         Vence: ${new Date(selectedLot.expiry_date).toLocaleDateString()} - 
@@ -209,9 +229,15 @@ class POSSystem {
                     </div>
                 ` : ''}
 
-                ${isOverride && item.lot_override_reason ? `
+                ${this.featureLotOverride && isOverride && item.lot_override_reason ? `
                     <div class="alert alert-warning">
                         <strong>Motivo del override:</strong> ${item.lot_override_reason}
+                    </div>
+                ` : ''}
+
+                ${!this.featureLotOverride ? `
+                    <div class="lot-info">
+                        <span>🔄 FEFO automático - Se usará el lote más próximo a vencer</span>
                     </div>
                 ` : ''}
             </div>
@@ -381,23 +407,80 @@ class POSSystem {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.message || 'Error en la venta');
+                this.handleApiError(errorData);
+                return;
             }
 
             const result = await response.json();
             
-            // Venta exitosa
+            // Venta exitosa - emitir evento de telemetría para overrides
+            this.emitTelemetryEvents(result);
+            
             this.showSuccess(`Venta procesada exitosamente. ID: ${result.sale_id}`);
             this.clearCart();
 
         } catch (error) {
             console.error('Checkout error:', error);
-            this.showError(error.message || 'Error al procesar la venta');
+            this.showError('Error al procesar la venta');
         } finally {
             const checkoutBtn = document.getElementById('checkout-btn');
             checkoutBtn.disabled = false;
             checkoutBtn.textContent = 'Procesar Venta';
         }
+    }
+
+    handleApiError(errorData) {
+        const errorCode = errorData.error || 'UNKNOWN_ERROR';
+        const errorDetail = errorData.detail || errorData.message || 'Error desconocido';
+        
+        // Mapear códigos de error a mensajes claros
+        const errorMessages = {
+            'INSUFFICIENT_STOCK': 'Stock insuficiente para completar la venta',
+            'INVALID_LOT': 'Lote inválido - El lote seleccionado no es válido o no existe',
+            'INSUFFICIENT_SHELF_LIFE': 'Vida útil insuficiente - El lote no cumple con la vida útil mínima requerida',
+            'VALIDATION_ERROR': 'Error de validación en los datos de la venta',
+            'PERMISSION_REQUIRED': 'Permiso requerido - Se requieren permisos especiales para esta operación',
+            'AUTHENTICATION_REQUIRED': 'Se requiere autenticación para realizar esta operación',
+            'CUSTOMER_NOT_FOUND': 'Cliente no encontrado',
+            'PRODUCT_NOT_FOUND': 'Producto no encontrado'
+        };
+
+        const friendlyMessage = errorMessages[errorCode] || errorDetail;
+        this.showError(friendlyMessage);
+    }
+
+    emitTelemetryEvents(saleResult) {
+        // Emitir eventos de telemetría para overrides de lotes
+        this.cart.forEach(item => {
+            if (item.lot_id !== item.recommendedLotId && item.lot_override_reason) {
+                this.logLotOverrideEvent({
+                    sale_id: saleResult.sale_id,
+                    product_id: item.product.id,
+                    product_name: item.product.name,
+                    lot_id: item.lot_id,
+                    recommended_lot_id: item.recommendedLotId,
+                    reason: item.lot_override_reason,
+                    user: 'current_user', // Se puede obtener del contexto
+                    timestamp: new Date().toISOString()
+                });
+            }
+        });
+    }
+
+    logLotOverrideEvent(eventData) {
+        // Log a consola para desarrollo
+        console.log('LOT_OVERRIDE_EVENT:', eventData);
+        
+        // Enviar a endpoint de telemetría (implementar según necesidades)
+        fetch('/api/v1/telemetry/lot-override', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(eventData)
+        }).catch(error => {
+            console.warn('Failed to send telemetry event:', error);
+        });
     }
 
     clearCart() {
@@ -406,13 +489,48 @@ class POSSystem {
     }
 
     showError(message) {
-        // Implementar notificación de error
-        alert(`Error: ${message}`);
+        this.showNotification(message, 'error');
     }
 
     showSuccess(message) {
-        // Implementar notificación de éxito
-        alert(`Éxito: ${message}`);
+        this.showNotification(message, 'success');
+    }
+
+    showNotification(message, type = 'info') {
+        const container = document.getElementById('notification-container');
+        if (!container) return;
+
+        // Crear elemento de notificación
+        const notification = document.createElement('div');
+        notification.className = `pos-notification pos-notification-${type}`;
+        
+        notification.innerHTML = `
+            <div class="notification-content">
+                <span class="notification-icon">${type === 'error' ? '⚠️' : type === 'success' ? '✅' : 'ℹ️'}</span>
+                <span class="notification-message">${message}</span>
+                <button class="notification-close" onclick="this.parentElement.parentElement.remove()">×</button>
+            </div>
+        `;
+
+        // Agregar al contenedor
+        container.appendChild(notification);
+
+        // Auto-remover después de 5 segundos
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.classList.add('removing');
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.remove();
+                    }
+                }, 300);
+            }
+        }, 5000);
+
+        // Animar entrada
+        setTimeout(() => {
+            notification.classList.add('pos-notification-show');
+        }, 10);
     }
 }
 

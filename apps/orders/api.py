@@ -10,6 +10,7 @@ from django.http import HttpRequest
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.db.models import QuerySet
+from django_ratelimit.decorators import ratelimit
 
 from apps.orders.services import checkout
 from apps.stock.services import ExitError
@@ -93,6 +94,7 @@ class OrderDetailOut(Schema):
 
 # ==== Endpoint ====
 @router.post("/order/checkout", response={201: CheckoutOut, 400: ErrorOut, 404: ErrorOut, 409: ErrorOut})
+@ratelimit(key='user', rate='10/m', method='POST', block=True)
 def order_checkout(request, payload: CheckoutIn):
     try:
         o = checkout(

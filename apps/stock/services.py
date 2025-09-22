@@ -35,6 +35,27 @@ class StockError(Exception):
         self.code = code
 
 
+class NotEnoughStock(StockError):
+    """Excepción cuando no hay suficiente stock disponible."""
+    def __init__(self, product_id: int, requested: Decimal, available: Decimal):
+        message = f"Stock insuficiente para producto {product_id}. Solicitado: {requested}, disponible: {available}"
+        super().__init__("NOT_ENOUGH_STOCK", message)
+        self.product_id = product_id
+        self.requested = requested
+        self.available = available
+
+
+class NoLotsAvailable(StockError):
+    """Excepción cuando no hay lotes disponibles que cumplan los criterios."""
+    def __init__(self, product_id: int, criteria: str = ""):
+        message = f"No hay lotes disponibles para producto {product_id}"
+        if criteria:
+            message += f" que cumplan: {criteria}"
+        super().__init__("NO_LOTS_AVAILABLE", message)
+        self.product_id = product_id
+        self.criteria = criteria
+
+
 def get_lot_options(
     product: Product, 
     qty: Decimal, 

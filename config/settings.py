@@ -48,9 +48,18 @@ DJANGO_APPS = [
 ]
 
 # Third party apps
+# Third party apps
 THIRD_PARTY_APPS = [
     'rest_framework',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',  # For token rotation
     'corsheaders',
+    'django_extensions',
+    'django_prometheus',  # Prometheus metrics
+    'django_celery_beat',  # Celery Beat for scheduled tasks
+    'django_celery_results',  # Celery results backend
+    # 'django_ratelimit',  # Rate limiting - temporarily disabled for development
+    'sentry_sdk',  # Error tracking
 ]
 
 # Local apps
@@ -71,23 +80,93 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 # ------------------------------------------------------------------------------
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',  # Prometheus metrics - first
     'django.middleware.security.SecurityMiddleware',
+    'apps.core.middleware.RequestIDMiddleware',  # Request ID tracking
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # CORS middleware
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.core.middleware.AccessLogMiddleware',  # Access logging with structlog
+    'apps.core.middleware.StructlogMiddleware',  # Structlog context middleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',  # Prometheus metrics - last
 ]
 
 # CORS CONFIGURATION
 # ------------------------------------------------------------------------------
 
 CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', '0') == '1'
-CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
+CORS_ALLOWED_ORIGINS = [
+    origin.strip() 
+    for origin in os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',') 
+    if origin.strip()
+]
 
-# URL CONFIGURATION
+# CORS security headers
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# REST FRAMEWORK CONFIGURATION
+# ------------------------------------------------------------------------------
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+}
+
+# JWT CONFIGURATION
+# ------------------------------------------------------------------------------
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),  # ≤15m como requerido
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),     # 7d como requerido
+    'ROTATE_REFRESH_TOKENS': True,                   # Refresh rotativo
+    'BLACKLIST_AFTER_ROTATION': True,               # Blacklist después de rotación
+    'UPDATE_LAST_LOGIN': True,
+    
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': os.getenv("JWT_SECRET", "devjwt"),
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+    
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    
+    'JTI_CLAIM': 'jti',
+    
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=15),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=7),
+}
 # ------------------------------------------------------------------------------
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
@@ -115,9 +194,40 @@ TEMPLATES = [
 DATABASES = {
     'default': dj_database_url.config(
         default=os.environ.get('DATABASE_URL', 'sqlite:///db.sqlite3'),
-        conn_max_age=600,
+        conn_max_age=int(os.environ.get('CONN_MAX_AGE', '60')),  # Connection pooling
     )
 }
+
+# CACHE CONFIGURATION
+# ------------------------------------------------------------------------------
+# Use Redis in production, LocMemCache in development if Redis is not available
+try:
+    import redis
+    redis_url = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/1')
+    # Test Redis connection
+    r = redis.from_url(redis_url)
+    r.ping()
+    
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': redis_url,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            },
+            'KEY_PREFIX': 'bff_cache',
+            'TIMEOUT': 300,  # Default timeout 5 minutes
+        }
+    }
+except (ImportError, redis.ConnectionError, redis.TimeoutError):
+    # Fallback to LocMemCache if Redis is not available
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+            'TIMEOUT': 300,
+        }
+    }
 
 
 # PASSWORD VALIDATION
@@ -177,6 +287,12 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get('SECURE_HSTS_INCLUDE_SUBDOMAINS', '0') == '1'
     SECURE_HSTS_PRELOAD = os.environ.get('SECURE_HSTS_PRELOAD', '0') == '1'
 
+# Security headers (always enabled)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
 # APPLICATION SETTINGS
 # ------------------------------------------------------------------------------
 
@@ -191,3 +307,159 @@ LOW_STOCK_THRESHOLD_DEFAULT = int(
 NEAR_EXPIRY_DAYS = int(os.getenv("NEAR_EXPIRY_DAYS", "7"))
 
 WHATSAPP_PROVIDER_URL = os.getenv("WHATSAPP_PROVIDER_URL", "http://localhost")
+
+# FEATURE FLAGS
+# ------------------------------------------------------------------------------
+
+# Feature flag para habilitar/deshabilitar la selección manual de lotes en POS
+# Cuando está en False, el sistema usa FEFO automático y oculta la UI de selección
+FEATURE_LOT_OVERRIDE = os.getenv("FEATURE_LOT_OVERRIDE", "true").lower() == "true"
+
+# LOGGING CONFIGURATION
+# ------------------------------------------------------------------------------
+import structlog
+
+# Configuración de structlog
+if os.environ.get('STRUCTLOG_ENABLE', '1') == '1':
+    structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.stdlib.filter_by_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.processors.UnicodeDecoder(),
+            structlog.processors.JSONRenderer()
+        ],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+# Configuración de logging de Django
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'json': {
+            '()': structlog.stdlib.ProcessorFormatter,
+            'processor': structlog.processors.JSONRenderer(),
+        },
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'json' if os.environ.get('STRUCTLOG_ENABLE', '1') == '1' else 'verbose',
+        },
+    },
+    'loggers': {
+        '': {
+            'handlers': ['console'],
+            'level': os.environ.get('LOG_LEVEL', 'INFO'),
+            'propagate': True,
+        },
+        'django': {
+            'handlers': ['console'],
+            'level': os.environ.get('LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+        'apps': {
+            'handlers': ['console'],
+            'level': os.environ.get('LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+        'django.security.DisallowedHost': {
+            'handlers': ['console'],
+            'level': 'CRITICAL',
+            'propagate': False,
+        },
+    },
+}
+
+# SENTRY CONFIGURATION
+# ------------------------------------------------------------------------------
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk.integrations.redis import RedisIntegration
+
+# Configurar Sentry si SENTRY_DSN está definido
+SENTRY_DSN = os.environ.get('SENTRY_DSN')
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            DjangoIntegration(
+                transaction_style='url',
+                middleware_spans=True,
+                signals_spans=True,
+                cache_spans=True,
+            ),
+            RedisIntegration(),
+        ],
+        # Performance Monitoring
+        traces_sample_rate=0.1,  # 10% de las transacciones
+        # Error Monitoring
+        send_default_pii=False,  # No enviar información personal
+        environment=os.environ.get('ENVIRONMENT', 'development'),
+    )
+
+
+# CELERY CONFIGURATION
+# ------------------------------------------------------------------------------
+
+# Celery broker configuration
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/1')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
+
+# Celery task configuration
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+
+# Celery task routing
+CELERY_TASK_ROUTES = {
+    'apps.notifications.tasks.*': {'queue': 'notifications'},
+    'apps.stock.tasks.*': {'queue': 'stock'},
+}
+
+# Celery retry configuration
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+# Celery Beat configuration (scheduled tasks)
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# Celery task time limits
+CELERY_TASK_SOFT_TIME_LIMIT = 300  # 5 minutes
+CELERY_TASK_TIME_LIMIT = 600  # 10 minutes
+
+# Celery worker configuration
+CELERY_WORKER_HIJACK_ROOT_LOGGER = False
+CELERY_WORKER_LOG_FORMAT = '[%(asctime)s: %(levelname)s/%(processName)s] %(message)s'
+CELERY_WORKER_TASK_LOG_FORMAT = '[%(asctime)s: %(levelname)s/%(processName)s][%(task_name)s(%(task_id)s)] %(message)s'
+
+# SENTRY CONFIGURATION
+# ------------------------------------------------------------------------------
+if not DEBUG:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    
+    sentry_sdk.init(
+        dsn=os.environ.get('SENTRY_DSN'),
+        integrations=[
+            DjangoIntegration(),
+            CeleryIntegration(),
+        ],
+        traces_sample_rate=0.1,
+        send_default_pii=True,
+        release=os.environ.get('RELEASE', '1.0.0'),
+    )
