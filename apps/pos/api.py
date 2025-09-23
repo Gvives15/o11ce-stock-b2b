@@ -267,7 +267,7 @@ def create_pos_sale(request, sale_data: SaleIn):
     for plan_data in allocation_plans:
         for allocation in plan_data['plan']:
             lot = StockLot.objects.select_for_update().get(id=allocation.lot_id)
-            if lot.qty_on_hand < allocation.qty_allocated:
+            if lot.qty_available < allocation.qty_allocated:
                 return 400, {"error": "INSUFFICIENT_STOCK", "detail": f"Stock insuficiente en lote {lot.lot_code}"}
     
     # FASE 3: Ejecutar todos los cambios (solo si todo está validado)

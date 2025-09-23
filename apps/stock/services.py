@@ -179,7 +179,7 @@ def pick_lots_fefo(
     ).order_by('expiry_date', 'id')
     
     # Verificar stock total disponible
-    total_available = sum(lot.qty_on_hand for lot in available_lots)
+    total_available = sum(lot.qty_available for lot in available_lots)
     if total_available < qty_needed:
         raise NotEnoughStock(product.id, qty_needed, total_available)
     
@@ -191,7 +191,7 @@ def pick_lots_fefo(
         if remaining_qty <= 0:
             break
             
-        qty_to_take = min(lot.qty_on_hand, remaining_qty)
+        qty_to_take = min(lot.qty_available, remaining_qty)
         allocation_plan.append({
             'lot_id': lot.id,
             'qty_to_take': qty_to_take
@@ -323,7 +323,7 @@ def get_lot_options(
             lot_id=lot.id,
             lot_code=lot.lot_code,
             expiry_date=lot.expiry_date,
-            qty_available=lot.qty_on_hand,
+            qty_available=lot.qty_available,
             unit_cost=lot.unit_cost,
             warehouse_name=lot.warehouse.name if lot.warehouse else None
         )
@@ -372,7 +372,7 @@ def allocate_lots_fefo(
         base_query = base_query.filter(warehouse_id=warehouse_id)
     
     # Verificar si hay stock disponible sin considerar vida útil
-    total_available_any_expiry = sum(lot.qty_on_hand for lot in base_query)
+    total_available_any_expiry = sum(lot.qty_available for lot in base_query)
     if total_available_any_expiry < qty_needed:
         raise StockError(
             "INSUFFICIENT_STOCK", 
@@ -384,7 +384,7 @@ def allocate_lots_fefo(
         base_query = base_query.filter(expiry_date__gte=min_expiry_date)
         
         # Verificar si hay stock suficiente con vida útil adecuada
-        total_available_with_shelf_life = sum(lot.qty_on_hand for lot in base_query)
+        total_available_with_shelf_life = sum(lot.qty_available for lot in base_query)
         if total_available_with_shelf_life < qty_needed:
             raise StockError(
                 "INSUFFICIENT_SHELF_LIFE", 
@@ -409,14 +409,14 @@ def allocate_lots_fefo(
             raise StockError("INVALID_LOT", f"Lote {chosen_lot_id} no válido o sin stock disponible")
         
         # Verificar que el lote elegido cumple con la vida útil mínima solo si no hay cantidad restante
-        if chosen_lot.qty_on_hand >= qty_needed and chosen_lot.expiry_date < min_expiry_date:
+        if chosen_lot.qty_available >= qty_needed and chosen_lot.expiry_date < min_expiry_date:
             raise StockError(
                 "INSUFFICIENT_SHELF_LIFE", 
                 f"Lote {chosen_lot.lot_code} no cumple vida útil mínima de {min_shelf_life_days} días"
             )
         
         # Asignar del lote elegido lo que se pueda
-        qty_from_chosen = min(remaining_qty, chosen_lot.qty_on_hand)
+        qty_from_chosen = min(remaining_qty, chosen_lot.qty_available)
         allocation_plan.append(AllocationPlan(
             lot_id=chosen_lot.id,
             qty_allocated=qty_from_chosen
@@ -436,7 +436,7 @@ def allocate_lots_fefo(
             if remaining_qty <= 0:
                 break
                 
-            qty_from_lot = min(remaining_qty, lot.qty_on_hand)
+            qty_from_lot = min(remaining_qty, lot.qty_available)
             allocation_plan.append(AllocationPlan(
                 lot_id=lot.id,
                 qty_allocated=qty_from_lot
@@ -445,7 +445,7 @@ def allocate_lots_fefo(
     
     # Verificar si se pudo asignar toda la cantidad
     if remaining_qty > 0:
-        total_available = sum(lot.qty_on_hand for lot in base_query)
+        total_available = sum(lot.qty_available for lot in base_query)
         raise StockError(
             "INSUFFICIENT_STOCK", 
             f"Stock insuficiente. Solicitado: {qty_needed}, disponible: {total_available}"

@@ -40,7 +40,7 @@ class StockLot(models.Model):
 
     @property
     def qty_available(self):
-        """Cantidad disponible para asignación (0 si está en cuarentena, reservado o vencido)"""
+        """Cantidad disponible para asignación considerando reservas activas"""
         if self.is_quarantined or self.is_reserved:
             return 0
         
@@ -48,8 +48,19 @@ class StockLot(models.Model):
         from datetime import date
         if self.expiry_date < date.today():
             return 0
-            
-        return self.qty_on_hand
+        
+        # Calcular reservas activas para este lote
+        from apps.stock.reservations import Reservation
+        active_reservations = Reservation.objects.filter(
+            lot=self,
+            status__in=[Reservation.Status.PENDING, Reservation.Status.APPLIED]
+        ).aggregate(
+            total_reserved=models.Sum('qty')
+        )['total_reserved'] or 0
+        
+        # Disponible = on_hand - reservas activas
+        available = self.qty_on_hand - active_reservations
+        return max(0, available)  # No puede ser negativo
 
     def __str__(self) -> str:  # pragma: no cover
         return f"{self.product_id}-{self.lot_code}"
@@ -119,3 +130,9 @@ class Movement(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover
         return f"{self.type.title()} · {self.product.code} · {self.qty}"
+
+
+# Import Reservation model to make it available in the stock app
+from .reservations import Reservation
+
+__all__ = ['Warehouse', 'StockLot', 'Movement', 'Reservation']

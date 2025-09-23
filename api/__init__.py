@@ -17,6 +17,7 @@ from apps.stock.api_movements import router as movements_router
 # Customer & Order Management
 from apps.customers.api import router as customers_router
 from apps.orders.api import router as orders_router
+from apps.orders.picking_api import picking_router
 
 # Point of Sale
 from apps.pos.api import router as pos_router
@@ -93,6 +94,7 @@ api.add_router("/movements", movements_router)
 # 4. Customer & Order Management - Gestión de clientes y pedidos
 api.add_router("/customers", customers_router)
 api.add_router("/orders", orders_router)
+api.add_router("/orders", picking_router)  # Picking endpoints under /orders
 
 # 5. Point of Sale - Sistema de ventas
 api.add_router("/pos", pos_router)

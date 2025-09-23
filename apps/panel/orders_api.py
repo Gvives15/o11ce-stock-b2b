@@ -189,6 +189,19 @@ def change_order_status(request, order_id: int, data: StatusChangeRequest):
         order.client_req_id = idempotency_key
         order.save()
         
+        # Hook: liberar reservas si la orden se cancela
+        if new_domain_status == 'cancelled':
+            from apps.stock.reservations import Reservation
+            cancelled_reservations = Reservation.objects.filter(
+                order=order,
+                status__in=[Reservation.Status.PENDING, Reservation.Status.APPLIED]
+            )
+            for reservation in cancelled_reservations:
+                reservation.cancel()
+            
+            if cancelled_reservations.exists():
+                logger.info(f"Released {cancelled_reservations.count()} reservations for cancelled order {order.id}")
+        
         # Log de la transición
         logger.info(
             f"Status transition: Order {order.id} from {current_panel_status} to {data.status} "
