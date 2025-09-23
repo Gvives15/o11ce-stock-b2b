@@ -27,12 +27,22 @@ from apps.core.views import sentry_test_error
 from apps.stock.views import stock_detail
 from apps.core.b2b_views import home as b2b_home, cart as b2b_cart, checkout as b2b_checkout
 from apps.pos.views import pos_interface, pos_history, pos_sale_detail, pos_sale_lots_csv
+from django.http import HttpResponseRedirect
 
 def redirect_to_panel_login(request):
     return redirect('panel:login')
 
+def redirect_to_custom_pos(request):
+    """Redirige al POS personalizado del usuario"""
+    return HttpResponseRedirect('http://localhost:5173/')
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    
+    # JWT Authentication API (debe ir ANTES que Django Ninja API)
+    path('api/', include('apps.core.urls')),
+    
+    # Django Ninja API
     path('api/v1/', api.urls),
     
     # Metrics endpoints
@@ -46,9 +56,6 @@ urlpatterns = [
     # Sentry test endpoint
     path('sentry-test/', sentry_test_error, name='sentry_test_error'),
     
-    # JWT Authentication API
-    path('api/v1/', include('apps.core.urls')),
-    
     # Authentication
     path('accounts/login/', redirect_to_panel_login, name='login'),
     path('accounts/', include('django.contrib.auth.urls')),
@@ -56,8 +63,8 @@ urlpatterns = [
     # Panel and POS
     path('panel/', include('apps.panel.urls')),
     path('panel/stock/<int:product_id>/', stock_detail, name='panel_stock_detail'),
-    path('pos/', pos_interface, name='pos_interface'),
-    path('pos/history/', pos_history, name='pos_history'),
+    path('pos/', redirect_to_custom_pos, name='pos_interface'),
+    path('pos/history/', redirect_to_custom_pos, name='pos_history'),
     path('pos/sale/<str:sale_id>/', pos_sale_detail, name='pos_sale_detail'),
     path('pos/sale/<str:sale_id>/lots.csv', pos_sale_lots_csv, name='pos_sale_lots_csv'),
     

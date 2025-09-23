@@ -424,11 +424,37 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
-# Celery task routing
+# Celery task routing - Escalabilidad mejorada
 CELERY_TASK_ROUTES = {
+    # Notificaciones por prioridad
+    'apps.notifications.tasks.send_email_alert': {'queue': 'notifications_high'},
+    'apps.notifications.tasks.notify_new_order': {'queue': 'notifications_high'},
+    'apps.notifications.tasks.send_low_stock_alert': {'queue': 'notifications_low'},
+    
+    # Stock por tipo de operación
+    'apps.stock.tasks.scan_near_expiry': {'queue': 'stock_monitoring'},
+    'apps.stock.tasks.scan_low_stock': {'queue': 'stock_monitoring'},
+    'apps.stock.tasks.update_stock_metrics': {'queue': 'stock_metrics'},
+    'apps.stock.tasks.cleanup_expired_lots': {'queue': 'maintenance'},
+    
+    # Procesamiento de órdenes (futuro)
+    'apps.orders.tasks.*': {'queue': 'orders_processing'},
+    
+    # Reportes y analytics (futuro)
+    'apps.reports.tasks.*': {'queue': 'reports'},
+    
+    # Fallback para tareas no especificadas
     'apps.notifications.tasks.*': {'queue': 'notifications'},
     'apps.stock.tasks.*': {'queue': 'stock'},
 }
+
+# Configuración de prioridades de colas
+CELERY_TASK_DEFAULT_QUEUE = 'default'
+CELERY_TASK_CREATE_MISSING_QUEUES = True
+
+# Configuración de workers por cola
+CELERY_WORKER_DIRECT = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
 
 # Celery retry configuration
 CELERY_TASK_ACKS_LATE = True
