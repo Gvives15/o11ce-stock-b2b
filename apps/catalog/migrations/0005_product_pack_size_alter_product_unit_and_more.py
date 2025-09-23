@@ -34,7 +34,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="product",
             constraint=models.CheckConstraint(
-                condition=models.Q(
+                check=models.Q(
                     ("pack_size__isnull", True), ("pack_size__gt", 0), _connector="OR"
                 ),
                 name="ck_product_pack_size_positive",

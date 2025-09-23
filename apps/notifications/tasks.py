@@ -6,7 +6,7 @@ from typing import Optional
 from celery import shared_task
 from django.core.mail import send_mail
 from django.conf import settings
-from apps.core.metrics import increment_counter
+from apps.core.metrics import increment_orders_placed
 
 logger = logging.getLogger(__name__)
 

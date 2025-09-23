@@ -133,7 +133,7 @@ class Migration(migrations.Migration):
             options={
                 "constraints": [
                     models.CheckConstraint(
-                        condition=models.Q(("qty__gt", 0)),
+                        check=models.Q(("qty__gt", 0)),
                         name="ck_movement_qty_positive",
                     )
                 ],
@@ -153,7 +153,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="stocklot",
             constraint=models.CheckConstraint(
-                condition=models.Q(("qty_on_hand__gte", 0)),
+                check=models.Q(("qty_on_hand__gte", 0)),
                 name="ck_lot_qty_non_negative",
             ),
         ),

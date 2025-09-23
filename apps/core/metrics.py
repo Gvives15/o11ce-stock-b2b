@@ -23,6 +23,87 @@ near_expiry_lots = Gauge(
     ['product_category', 'days_to_expiry_range']
 )
 
+# Métricas generales del sistema
+system_counters = {}
+system_gauges = {}
+
+def increment_counter(metric_name, labels=None):
+    """
+    Incrementa un contador genérico del sistema.
+    
+    Args:
+        metric_name (str): Nombre de la métrica
+        labels (dict): Etiquetas para la métrica
+    """
+    if labels is None:
+        labels = {}
+    
+    try:
+        if metric_name not in system_counters:
+            system_counters[metric_name] = Counter(
+                metric_name,
+                f'System counter for {metric_name}',
+                list(labels.keys()) if labels else []
+            )
+        
+        if labels:
+            system_counters[metric_name].labels(**labels).inc()
+        else:
+            system_counters[metric_name].inc()
+            
+        logger.info(
+            "system_counter_incremented",
+            metric_name=metric_name,
+            labels=labels
+        )
+    except Exception as e:
+        logger.error(
+            "error_incrementing_system_counter",
+            error=str(e),
+            metric_name=metric_name,
+            labels=labels
+        )
+
+def set_gauge(metric_name, value, labels=None):
+    """
+    Establece el valor de un gauge genérico del sistema.
+    
+    Args:
+        metric_name (str): Nombre de la métrica
+        value (float): Valor a establecer
+        labels (dict): Etiquetas para la métrica
+    """
+    if labels is None:
+        labels = {}
+    
+    try:
+        if metric_name not in system_gauges:
+            system_gauges[metric_name] = Gauge(
+                metric_name,
+                f'System gauge for {metric_name}',
+                list(labels.keys()) if labels else []
+            )
+        
+        if labels:
+            system_gauges[metric_name].labels(**labels).set(value)
+        else:
+            system_gauges[metric_name].set(value)
+            
+        logger.info(
+            "system_gauge_updated",
+            metric_name=metric_name,
+            value=value,
+            labels=labels
+        )
+    except Exception as e:
+        logger.error(
+            "error_updating_system_gauge",
+            error=str(e),
+            metric_name=metric_name,
+            value=value,
+            labels=labels
+        )
+
 def increment_orders_placed(customer_type='unknown', status='created'):
     """
     Incrementa el contador de órdenes creadas.

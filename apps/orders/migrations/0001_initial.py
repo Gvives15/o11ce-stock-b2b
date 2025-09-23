@@ -108,7 +108,7 @@ class Migration(migrations.Migration):
                         fields=("order", "product"), name="uq_orderitem_per_product"
                     ),
                     models.CheckConstraint(
-                        condition=models.Q(("qty__gt", 0)),
+                        check=models.Q(("qty__gt", 0)),
                         name="ck_orderitem_qty_positive",
                     ),
                 ],

@@ -74,11 +74,11 @@ class Migration(migrations.Migration):
                 ],
                 "constraints": [
                     models.CheckConstraint(
-                        condition=models.Q(("qty_consumed__gt", 0)),
+                        check=models.Q(("qty_consumed__gt", 0)),
                         name="ck_sale_item_lot_qty_positive",
                     ),
                     models.CheckConstraint(
-                        condition=models.Q(("item_sequence__gt", 0)),
+                        check=models.Q(("item_sequence__gt", 0)),
                         name="ck_sale_item_lot_sequence_positive",
                     ),
                 ],

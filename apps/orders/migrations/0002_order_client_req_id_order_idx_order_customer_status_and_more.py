@@ -42,35 +42,35 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="order",
             constraint=models.CheckConstraint(
-                condition=models.Q(("subtotal__gte", 0)),
+                check=models.Q(("subtotal__gte", 0)),
                 name="ck_order_subtotal_non_negative",
             ),
         ),
         migrations.AddConstraint(
             model_name="order",
             constraint=models.CheckConstraint(
-                condition=models.Q(("discount_total__gte", 0)),
+                check=models.Q(("discount_total__gte", 0)),
                 name="ck_order_discount_non_negative",
             ),
         ),
         migrations.AddConstraint(
             model_name="order",
             constraint=models.CheckConstraint(
-                condition=models.Q(("tax_total__gte", 0)),
+                check=models.Q(("tax_total__gte", 0)),
                 name="ck_order_tax_non_negative",
             ),
         ),
         migrations.AddConstraint(
             model_name="order",
             constraint=models.CheckConstraint(
-                condition=models.Q(("total__gte", 0)),
+                check=models.Q(("total__gte", 0)),
                 name="ck_order_total_non_negative",
             ),
         ),
         migrations.AddConstraint(
             model_name="order",
             constraint=models.CheckConstraint(
-                condition=models.Q(
+                check=models.Q(
                     ("delivery_window_to__gte", models.F("delivery_window_from")),
                     ("delivery_window_from__isnull", True),
                     ("delivery_window_to__isnull", True),
@@ -90,7 +90,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="orderitem",
             constraint=models.CheckConstraint(
-                condition=models.Q(("unit_price__gte", 0)),
+                check=models.Q(("unit_price__gte", 0)),
                 name="ck_orderitem_price_non_negative",
             ),
         ),

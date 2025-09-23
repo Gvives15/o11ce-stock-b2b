@@ -93,7 +93,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="movement",
             constraint=models.CheckConstraint(
-                condition=models.Q(
+                check=models.Q(
                     ("type", "exit"),
                     models.Q(
                         ("type", "entry"),
@@ -109,7 +109,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="movement",
             constraint=models.CheckConstraint(
-                condition=models.Q(
+                check=models.Q(
                     ("type", "entry"),
                     models.Q(("type", "exit"), ("lot__isnull", False)),
                     _connector="OR",
@@ -120,7 +120,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="stocklot",
             constraint=models.CheckConstraint(
-                condition=models.Q(("unit_cost__gt", 0)),
+                check=models.Q(("unit_cost__gt", 0)),
                 name="ck_lot_unit_cost_positive",
             ),
         ),
@@ -167,7 +167,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="reservation",
             constraint=models.CheckConstraint(
-                condition=models.Q(("qty__gt", 0)), name="ck_reservation_qty_positive"
+                check=models.Q(("qty__gt", 0)), name="ck_reservation_qty_positive"
             ),
         ),
         migrations.AddConstraint(

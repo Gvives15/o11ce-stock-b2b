@@ -82,7 +82,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="benefit",
             constraint=models.CheckConstraint(
-                condition=models.Q(
+                check=models.Q(
                     models.Q(
                         ("type", "discount"),
                         ("value__gte", 0),
@@ -98,7 +98,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="benefit",
             constraint=models.CheckConstraint(
-                condition=models.Q(
+                check=models.Q(
                     models.Q(("combo_spec__isnull", False), ("type", "combo")),
                     ("type", "discount"),
                     _connector="OR",
@@ -109,7 +109,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="product",
             constraint=models.CheckConstraint(
-                condition=models.Q(("tax_rate__gte", 0), ("tax_rate__lte", 100)),
+                check=models.Q(("tax_rate__gte", 0), ("tax_rate__lte", 100)),
                 name="ck_product_tax_rate_valid",
             ),
         ),

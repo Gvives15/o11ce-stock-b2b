@@ -76,7 +76,7 @@ class Migration(migrations.Migration):
                 ],
                 "constraints": [
                     models.CheckConstraint(
-                        condition=models.Q(("qty__gt", 0)), name="ck_audit_qty_positive"
+                        check=models.Q(("qty__gt", 0)), name="ck_audit_qty_positive"
                     )
                 ],
             },

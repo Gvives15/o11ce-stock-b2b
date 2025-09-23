@@ -31,14 +31,14 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="benefit",
             constraint=models.CheckConstraint(
-                condition=models.Q(("active_to__gte", models.F("active_from"))),
+                check=models.Q(("active_to__gte", models.F("active_from"))),
                 name="ck_benefit_valid_date_range",
             ),
         ),
         migrations.AddConstraint(
             model_name="benefit",
             constraint=models.CheckConstraint(
-                condition=models.Q(
+                check=models.Q(
                     ("value__gte", 0), ("value__isnull", True), _connector="OR"
                 ),
                 name="ck_benefit_value_non_negative",
@@ -47,13 +47,13 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="product",
             constraint=models.CheckConstraint(
-                condition=models.Q(("price__gt", 0)), name="ck_product_price_positive"
+                check=models.Q(("price__gt", 0)), name="ck_product_price_positive"
             ),
         ),
         migrations.AddConstraint(
             model_name="product",
             constraint=models.CheckConstraint(
-                condition=models.Q(("tax_rate__gte", 0)),
+                check=models.Q(("tax_rate__gte", 0)),
                 name="ck_product_tax_rate_non_negative",
             ),
         ),
