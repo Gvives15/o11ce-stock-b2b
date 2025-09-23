@@ -6,13 +6,18 @@ from datetime import datetime
 from typing import Optional, List
 from decimal import Decimal
 from ninja import Router, Schema
+from ninja.errors import HttpError
 from django.db import IntegrityError
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.utils import timezone
 from apps.catalog.models import Product, Benefit
 from apps.catalog.utils import get_active_benefits
+from apps.catalog.pricing import price_quote
+from apps.customers.models import Customer
+from apps.stock.services import allocate_lots_fefo, StockError
 from apps.core.cache_service import CacheService, cache_response
+from apps.core.permissions import vendedor_required
 import logging
 import re
 
@@ -90,6 +95,31 @@ class ProductSearchResult(Schema):
 class SearchResponse(Schema):
     results: List[ProductSearchResult]
     next: Optional[str] = None
+
+# Pricing endpoint schemas
+class PricingItemIn(Schema):
+    product_id: int
+    quantity: Decimal
+
+class PricingRequest(Schema):
+    customer_id: int
+    items: List[PricingItemIn]
+
+class PricingItemOut(Schema):
+    product_id: int
+    name: str
+    quantity: Decimal
+    unit_price: Decimal
+    subtotal: Decimal
+
+class PricingResponse(Schema):
+    items: List[PricingItemOut]
+    subtotal: Decimal
+    segment_discount_amount: Decimal
+    combo_discounts: List[dict]
+    total_combo_discount: Decimal
+    total: Decimal
+    stock_validated: bool = True
 
 # Endpoints
 @router.post("/products", response={201: ProductOut, 409: ErrorOut, 400: ErrorOut})
@@ -263,4 +293,129 @@ def search_products(request,
 def ping(request) -> dict:
     """Simple endpoint used for smoke testing the catalog API."""
     return {"message": "catalog pong"}
+
+
+def validate_stock_availability(items_data: List[dict]) -> None:
+    """
+    Valida disponibilidad de stock para una lista de items usando FEFO.
+    
+    Args:
+        items_data: Lista de diccionarios con 'product_id' y 'quantity'
+        
+    Raises:
+        HttpError: 409 si no hay stock suficiente para algún producto
+    """
+    for item_data in items_data:
+        try:
+            product = Product.objects.get(id=item_data['product_id'])
+            quantity = item_data['quantity']
+            
+            # Usar allocate_lots_fefo para validar stock sin realizar la asignación
+            # Solo validamos que hay stock suficiente
+            allocate_lots_fefo(
+                product=product,
+                qty_needed=quantity,
+                chosen_lot_id=None,
+                min_shelf_life_days=0,
+                warehouse_id=None
+            )
+            
+        except Product.DoesNotExist:
+            # Si el producto no existe, lo ignoramos (igual que price_quote)
+            continue
+        except StockError as e:
+            if e.code == "INSUFFICIENT_STOCK":
+                raise HttpError(
+                    409, 
+                    f"Stock insuficiente para producto {product.name} (ID: {product.id}). "
+                    f"Solicitado: {quantity}. {str(e)}"
+                )
+            else:
+                # Otros errores de stock se tratan como errores internos
+                logger.error(f"Error interno en /catalog/pricing: {str(e)}")
+                raise HttpError(500, f"Error de validación de stock: {str(e)}")
+
+
+@router.post("/pricing", response={200: PricingResponse, 400: ErrorOut, 409: ErrorOut, 422: ErrorOut, 500: ErrorOut})
+def calculate_pricing_with_stock_validation(request, payload: PricingRequest):
+    """
+    Calcula precios con descuentos aplicados y valida disponibilidad de stock.
+    
+    Este endpoint combina el cálculo de precios del motor de pricing existente
+    con validación de stock usando FEFO. Retorna error 409 si no hay stock suficiente.
+    
+    Args:
+        payload: Datos de la solicitud con customer_id e items
+        
+    Returns:
+        PricingResponse: Precios calculados con validación de stock confirmada
+        
+    Raises:
+        400: Datos de entrada inválidos
+        401: No autorizado (manejado por middleware)
+        409: Stock insuficiente para uno o más productos
+        422: Error de validación
+        500: Error interno del servidor
+    """
+    try:
+        # Validaciones básicas
+        if not payload.items:
+            raise HttpError(400, "Debe incluir al menos un item")
+        
+        if len(payload.items) > 50:
+            raise HttpError(400, "Máximo 50 items permitidos por solicitud")
+        
+        # Validar cantidades positivas
+        for item in payload.items:
+            if item.quantity <= 0:
+                raise HttpError(400, f"La cantidad debe ser mayor a 0 para el producto {item.product_id}")
+        
+        # Obtener cliente
+        try:
+            customer = Customer.objects.get(id=payload.customer_id)
+        except Customer.DoesNotExist:
+            raise HttpError(404, "Cliente no encontrado")
+        
+        # Preparar items para validación y pricing
+        items_data = []
+        for item in payload.items:
+            items_data.append({
+                'product_id': item.product_id,
+                'quantity': item.quantity
+            })
+        
+        # VALIDAR STOCK PRIMERO - esto puede lanzar HttpError 409
+        validate_stock_availability(items_data)
+        
+        # Si llegamos aquí, el stock está disponible, proceder con pricing
+        quote = price_quote(customer, items_data)
+        
+        # Convertir el resultado a nuestro schema de respuesta
+        response_items = []
+        for pricing_item in quote.items:
+            response_items.append(PricingItemOut(
+                product_id=pricing_item.product.id,
+                name=pricing_item.product.name,
+                quantity=pricing_item.quantity,
+                unit_price=pricing_item.unit_price,
+                subtotal=pricing_item.subtotal
+            ))
+        
+        return PricingResponse(
+            items=response_items,
+            subtotal=quote.subtotal,
+            segment_discount_amount=quote.segment_discount_amount,
+            combo_discounts=[combo.__dict__ for combo in quote.combo_discounts],
+            total_combo_discount=quote.total_combo_discount,
+            total=quote.total,
+            stock_validated=True
+        )
+        
+    except HttpError:
+        # Re-raise HttpErrors (400, 401, 409, etc.)
+        raise
+    except Exception as e:
+        # Cualquier otro error se trata como error interno
+        logger.error(f"Error interno en /catalog/pricing: {str(e)}")
+        raise HttpError(500, "Error interno del servidor")
 
