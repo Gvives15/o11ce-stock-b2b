@@ -1,140 +1,150 @@
-import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
-import { useAuthStore } from '@/stores/auth'
-import { 
-  isCurrentlyRefreshing, 
-  setRefreshing, 
-  enqueue, 
-  resolveAll, 
-  clearQueue 
-} from './authRefresh'
-import { showErrorToast } from './errorToast'
+import axios from 'axios';
 
+// Crear instancia de axios con configuración base
 const axiosClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api',
-  timeout: 15000,
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
+  timeout: 15000, // 15 segundos como especificado
+  withCredentials: false, // Configurado como false según especificación
   headers: {
-    'Content-Type': 'application/json'
-  }
-})
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
+});
 
-// Request interceptor - Add Authorization header
+// Interceptor para requests - agregar token si existe
 axiosClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const authStore = useAuthStore()
-    const token = authStore.getAccess()
-    
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`
+  (config) => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     
-    return config
+    // Log para debugging (solo en desarrollo)
+    if (import.meta.env.DEV) {
+      console.log(`🚀 ${config.method?.toUpperCase()} ${config.url}`, {
+        headers: config.headers,
+        data: config.data
+      });
+    }
+    
+    return config;
   },
   (error) => {
-    return Promise.reject(error)
+    console.error('❌ Request Error:', error);
+    return Promise.reject(error);
   }
-)
+);
 
-// Response interceptor - Handle 401 and refresh token
+// Interceptor para responses - manejar errores de autenticación
 axiosClient.interceptors.response.use(
   (response) => {
-    return response
+    // Log para debugging (solo en desarrollo)
+    if (import.meta.env.DEV) {
+      console.log(`✅ ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`, response.data);
+    }
+    return response;
   },
-  async (error: AxiosError) => {
-    const authStore = useAuthStore()
-    const originalRequest = error.config as InternalAxiosRequestConfig & { __isRetry?: boolean }
-    
-    // Skip refresh logic for auth endpoints and already retried requests
-    if (
-      !originalRequest ||
-      originalRequest.url?.includes('/auth/refresh') ||
-      originalRequest.__isRetry
-    ) {
-      // Show error toast for non-refresh failures
-      if (!originalRequest?.url?.includes('/auth/refresh')) {
-        showErrorToast(error)
-      }
-      return Promise.reject(error)
-    }
-    
-    // Handle 401 token expired
-    if (error.response?.status === 401) {
-      const errorData = error.response.data as any
-      const isTokenExpired = errorData?.code === 'token_expired' || 
-                            errorData?.message?.includes('token') ||
-                            errorData?.message?.includes('expired')
-      
-      if (isTokenExpired && authStore.getRefresh()) {
-        // If already refreshing, queue this request
-        if (isCurrentlyRefreshing()) {
-          return new Promise((resolve) => {
-            enqueue((newToken: string) => {
-              if (originalRequest.headers) {
-                originalRequest.headers.Authorization = `Bearer ${newToken}`
-              }
-              originalRequest.__isRetry = true
-              resolve(axiosClient(originalRequest))
-            })
-          })
-        }
-        
-        // Start refresh process
-        setRefreshing(true)
-        
-        try {
-          // Mock refresh token call - in real app, this would be actual API
-          const refreshToken = authStore.getRefresh()
-          
-          // Simulate refresh API call
-          const mockRefreshResponse = await new Promise<{access: string, refresh?: string}>((resolve, reject) => {
-            setTimeout(() => {
-              // Mock success/failure based on refresh token validity
-              if (refreshToken && refreshToken.includes('mock_refresh')) {
-                const newAccess = `mock_access_refreshed_${Date.now()}`
-                const newRefresh = `mock_refresh_refreshed_${Date.now()}`
-                resolve({ access: newAccess, refresh: newRefresh })
-              } else {
-                reject(new Error('Invalid refresh token'))
-              }
-            }, 500) // Simulate network delay
-          })
-          
-          // Update tokens
-          authStore.setTokens(mockRefreshResponse.access, mockRefreshResponse.refresh)
-          
-          // Resolve all pending requests
-          resolveAll(mockRefreshResponse.access)
-          
-          // Retry original request
-          if (originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${mockRefreshResponse.access}`
-          }
-          originalRequest.__isRetry = true
-          
-          return axiosClient(originalRequest)
-          
-        } catch (refreshError) {
-          // Refresh failed - logout user
-          clearQueue()
-          authStore.logout()
-          
-          // Dispatch custom event for router to handle
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('auth:logout'))
-          }
-          
-          return Promise.reject(refreshError)
-        } finally {
-          setRefreshing(false)
-        }
-      }
-    }
-    
-    // Show error toast for other errors (except auth failures handled above)
-    if (error.response?.status !== 401) {
-      showErrorToast(error)
-    }
-    return Promise.reject(error)
-  }
-)
+  async (error) => {
+    const originalRequest = error.config;
 
-export default axiosClient
+    // Log del error
+    if (import.meta.env.DEV) {
+      console.error(`❌ ${error.response?.status || 'Network'} Error:`, {
+        url: originalRequest?.url,
+        method: originalRequest?.method,
+        message: error.message,
+        response: error.response?.data
+      });
+    }
+
+    // Manejar error 401 (no autorizado)
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      // Intentar renovar token
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (refreshToken) {
+        try {
+          console.log('🔄 Intentando renovar token...');
+          const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/auth/refresh/`, {
+            refresh: refreshToken
+          });
+          
+          const { access } = response.data;
+          localStorage.setItem('access_token', access);
+          console.log('✅ Token renovado exitosamente');
+          
+          // Reintentar request original
+          originalRequest.headers.Authorization = `Bearer ${access}`;
+          return axiosClient(originalRequest);
+        } catch (refreshError) {
+          console.error('❌ Error renovando token:', refreshError);
+          // Si falla el refresh, limpiar tokens y redirigir a login
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          
+          // Mostrar toast de error
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('auth-error', { 
+              detail: { message: 'Sesión expirada. Por favor, inicia sesión nuevamente.' }
+            }));
+          }
+          
+          // Redirigir a login después de un breve delay
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1000);
+        }
+      } else {
+        // No hay refresh token, limpiar y redirigir a login
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('auth-error', { 
+            detail: { message: 'No hay sesión activa. Por favor, inicia sesión.' }
+          }));
+        }
+        
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 1000);
+      }
+    }
+
+    // Manejar otros errores comunes
+    if (error.response?.status >= 500) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('server-error', { 
+          detail: { message: 'Error del servidor. Por favor, intenta más tarde.' }
+        }));
+      }
+    } else if (error.response?.status >= 400 && error.response?.status < 500) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('client-error', { 
+          detail: { 
+            message: error.response?.data?.message || 'Error en la solicitud.',
+            status: error.response?.status
+          }
+        }));
+      }
+    } else if (error.code === 'ECONNABORTED') {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('timeout-error', { 
+          detail: { message: 'La solicitud tardó demasiado. Verifica tu conexión.' }
+        }));
+      }
+    } else if (!error.response) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('network-error', { 
+          detail: { message: 'Error de conexión. Verifica tu red.' }
+        }));
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+export default axiosClient;
+export { axiosClient };

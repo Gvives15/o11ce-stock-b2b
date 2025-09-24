@@ -1,116 +1,115 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { showToast } from '@/lib/errorToast'
+import LoginView from '@/views/LoginView.vue'
+import POSView from '@/views/POSView.vue'
+import ProductsView from '@/views/ProductsView.vue'
+import SalesView from '@/views/SalesView.vue'
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-      redirect: '/pos'
+      redirect: '/login'
     },
     {
       path: '/login',
       name: 'Login',
-      component: () => import('@/views/LoginView.vue'),
+      component: LoginView,
       meta: { requiresAuth: false }
     },
     {
-      path: '/denied',
-      name: 'Denied',
-      component: () => import('@/views/DeniedView.vue'),
-      meta: { requiresAuth: false }
+      path: '/pos',
+      name: 'POS',
+      component: POSView,
+      meta: { 
+        requiresAuth: true,
+        roles: ['vendedor_caja', 'admin']
+      }
     },
     {
-      path: '/',
-      component: () => import('@/layouts/POSLayout.vue'),
-      meta: { requiresAuth: true },
-      children: [
-        {
-          path: 'pos',
-          name: 'POS',
-          component: () => import('@/views/PosView.vue'),
-          meta: { 
-            requiresAuth: true,
-            allowedRoles: ['vendedor_caja', 'admin']
-          }
-        },
-        {
-          path: 'history',
-          name: 'History',
-          component: () => import('@/views/HistoryView.vue'),
-          meta: { 
-            requiresAuth: true,
-            allowedRoles: ['vendedor_caja', 'admin']
-          }
-        },
-        {
-          path: 'settings',
-          name: 'Settings',
-          component: () => import('@/views/SettingsView.vue'),
-          meta: { 
-            requiresAuth: true,
-            allowedRoles: ['admin']
-          }
-        }
-      ]
+      path: '/history',
+      name: 'History',
+      component: SalesView,
+      meta: { 
+        requiresAuth: true,
+        roles: ['vendedor_caja', 'admin']
+      }
+    },
+    {
+      path: '/products',
+      name: 'Products',
+      component: ProductsView,
+      meta: { 
+        requiresAuth: true,
+        roles: ['admin']
+      }
+    },
+    {
+      path: '/settings',
+      name: 'Settings',
+      component: () => import('@/views/SettingsView.vue'),
+      meta: { 
+        requiresAuth: true,
+        roles: ['admin']
+      }
     }
   ]
 })
 
-// Global navigation guard
+// Guard global para autenticación y roles
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
   
-  // Check if route requires authentication
-  if (to.meta.requiresAuth) {
-    // Check if user has access token
-    if (!authStore.getAccess()) {
-      showToast('Debes iniciar sesión', 'warning')
-      return next('/login')
-    }
-    
-    // Load user profile if not already loaded
-    if (!authStore.user) {
-      try {
-        await authStore.loadProfile()
-      } catch (error) {
-        showToast('Sesión inválida', 'error')
-        return next('/login')
+  // Si la ruta no requiere autenticación, permitir acceso
+  if (to.meta.requiresAuth === false) {
+    // Si ya está autenticado y va a login, redirigir según roles
+    if (authStore.isAuthenticated) {
+      const userRoles = authStore.userRoles
+      if (userRoles.includes('admin')) {
+        next('/settings')
+      } else {
+        next('/pos')
       }
+      return
     }
-    
-    // Check role-based access
-    if (to.meta.allowedRoles) {
-      const allowedRoles = to.meta.allowedRoles as string[]
-      const userRoles = authStore.roles
-      
-      const hasAccess = allowedRoles.some(role => userRoles.includes(role))
-      
-      if (!hasAccess) {
-        return next('/denied')
-      }
+    next()
+    return
+  }
+  
+  // Verificar autenticación
+  if (!authStore.accessToken) {
+    next('/login')
+    return
+  }
+  
+  // Si hay token pero no hay usuario, verificar autenticación
+  if (authStore.accessToken && !authStore.user) {
+    const isValid = await authStore.checkAuth()
+    if (!isValid) {
+      next('/login')
+      return
     }
   }
   
-  // Redirect authenticated users away from login
-  if (to.path === '/login' && authStore.isAuthenticated) {
-    return next('/pos')
+  // Verificar roles si están definidos
+  if (to.meta.roles && Array.isArray(to.meta.roles)) {
+    const hasRequiredRole = authStore.hasRole(to.meta.roles)
+    if (!hasRequiredRole) {
+      // Redirigir a una página apropiada según los roles del usuario
+      const userRoles = authStore.userRoles
+      if (userRoles.includes('admin')) {
+        next('/settings')
+      } else if (userRoles.includes('vendedor_caja')) {
+        next('/pos')
+      } else {
+        next('/login')
+      }
+      return
+    }
   }
   
   next()
 })
-
-// Listen for logout events from interceptor
-if (typeof window !== 'undefined') {
-  window.addEventListener('auth:logout', () => {
-    const authStore = useAuthStore()
-    if (authStore.isAuthenticated) {
-      authStore.logout()
-      router.push('/login')
-      showToast('Sesión expirada', 'warning')
-    }
-  })
-}
 
 export default router

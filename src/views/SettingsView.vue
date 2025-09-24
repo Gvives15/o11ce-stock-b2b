@@ -1,149 +1,151 @@
 <template>
-  <div class="space-y-6">
-    <div class="bg-white rounded-lg shadow p-6">
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold text-gray-900">Configuración del Sistema</h1>
-        <div class="flex items-center space-x-2">
-          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            Solo Admin
-          </span>
+  <div class="min-h-screen bg-gray-50">
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="px-4 py-6 sm:px-0">
+        <div class="flex justify-between items-center">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900">Configuración</h1>
+            <p class="mt-1 text-sm text-gray-600">Panel de administración del sistema</p>
+          </div>
+          <button
+            @click="logout"
+            class="btn-secondary"
+          >
+            Cerrar Sesión
+          </button>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- System Settings -->
-        <div class="space-y-4">
-          <h2 class="text-lg font-medium text-gray-900">Configuración General</h2>
-          
-          <div class="space-y-3">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                Nombre del Negocio
-              </label>
-              <input
-                v-model="settings.businessName"
-                type="text"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+      <!-- Content -->
+      <div class="px-4 py-6 sm:px-0">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <!-- Usuarios -->
+          <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+              <div class="flex items-center">
+                <div class="flex-shrink-0">
+                  <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt class="text-sm font-medium text-gray-500 truncate">Usuarios</dt>
+                    <dd class="text-lg font-medium text-gray-900">Gestionar usuarios del sistema</dd>
+                  </dl>
+                </div>
+              </div>
             </div>
-            
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                Moneda
-              </label>
-              <select
-                v-model="settings.currency"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="USD">Dólar (USD)</option>
-                <option value="EUR">Euro (EUR)</option>
-                <option value="ARS">Peso Argentino (ARS)</option>
-              </select>
-            </div>
-            
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                Zona Horaria
-              </label>
-              <select
-                v-model="settings.timezone"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="America/Argentina/Buenos_Aires">Buenos Aires</option>
-                <option value="America/New_York">Nueva York</option>
-                <option value="Europe/Madrid">Madrid</option>
-              </select>
+            <div class="bg-gray-50 px-5 py-3">
+              <div class="text-sm">
+                <button class="font-medium text-indigo-600 hover:text-indigo-500">
+                  Ver todos →
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- User Management -->
-        <div class="space-y-4">
-          <h2 class="text-lg font-medium text-gray-900">Gestión de Usuarios</h2>
-          
-          <div class="bg-gray-50 rounded-lg p-4">
-            <h3 class="font-medium text-gray-900 mb-3">Usuarios Activos</h3>
-            <div class="space-y-2">
-              <div
-                v-for="user in mockUsers"
-                :key="user.id"
-                class="flex items-center justify-between py-2 px-3 bg-white rounded border"
-              >
-                <div>
-                  <div class="font-medium text-sm">{{ user.name }}</div>
-                  <div class="text-xs text-gray-500">{{ user.email }}</div>
+          <!-- Productos -->
+          <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+              <div class="flex items-center">
+                <div class="flex-shrink-0">
+                  <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
                 </div>
-                <div class="flex flex-wrap gap-1">
-                  <span
-                    v-for="role in user.roles"
-                    :key="role"
-                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
-                  >
-                    {{ role }}
-                  </span>
+                <div class="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt class="text-sm font-medium text-gray-500 truncate">Productos</dt>
+                    <dd class="text-lg font-medium text-gray-900">Catálogo de productos</dd>
+                  </dl>
                 </div>
+              </div>
+            </div>
+            <div class="bg-gray-50 px-5 py-3">
+              <div class="text-sm">
+                <router-link to="/products" class="font-medium text-indigo-600 hover:text-indigo-500">
+                  Gestionar →
+                </router-link>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reportes -->
+          <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+              <div class="flex items-center">
+                <div class="flex-shrink-0">
+                  <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt class="text-sm font-medium text-gray-500 truncate">Reportes</dt>
+                    <dd class="text-lg font-medium text-gray-900">Análisis y estadísticas</dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+            <div class="bg-gray-50 px-5 py-3">
+              <div class="text-sm">
+                <button class="font-medium text-indigo-600 hover:text-indigo-500">
+                  Ver reportes →
+                </button>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Save Button -->
-      <div class="mt-6 pt-6 border-t border-gray-200">
-        <button
-          @click="saveSettings"
-          class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-        >
-          Guardar Configuración
-        </button>
+        <!-- User Info -->
+        <div class="mt-8 bg-white shadow rounded-lg">
+          <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">Información del Usuario</h3>
+            <div class="mt-5" v-if="authStore.user">
+              <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                <div>
+                  <dt class="text-sm font-medium text-gray-500">Nombre</dt>
+                  <dd class="mt-1 text-sm text-gray-900">{{ authStore.user.first_name }} {{ authStore.user.last_name }}</dd>
+                </div>
+                <div>
+                  <dt class="text-sm font-medium text-gray-500">Email</dt>
+                  <dd class="mt-1 text-sm text-gray-900">{{ authStore.user.email }}</dd>
+                </div>
+                <div>
+                  <dt class="text-sm font-medium text-gray-500">Usuario</dt>
+                  <dd class="mt-1 text-sm text-gray-900">{{ authStore.user.username }}</dd>
+                </div>
+                <div>
+                  <dt class="text-sm font-medium text-gray-500">Rol</dt>
+                  <dd class="mt-1 text-sm text-gray-900">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      {{ authStore.user.role === 'admin' ? 'Administrador' : 'Vendedor de Caja' }}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-
-    <!-- HTTP Interceptor Demo -->
-    <InterceptorDemo />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import InterceptorDemo from '@/components/InterceptorDemo.vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { useToast } from '@/lib/toast'
 
-interface Settings {
-  businessName: string
-  currency: string
-  timezone: string
-}
+const router = useRouter()
+const authStore = useAuthStore()
+const { success } = useToast()
 
-interface User {
-  id: string
-  name: string
-  email: string
-  roles: string[]
-}
-
-const settings = ref<Settings>({
-  businessName: 'Mi Negocio POS',
-  currency: 'USD',
-  timezone: 'America/Argentina/Buenos_Aires'
-})
-
-const mockUsers: User[] = [
-  {
-    id: '1',
-    name: 'Vendedor POS',
-    email: 'vendedor@pos.com',
-    roles: ['vendedor_caja']
-  },
-  {
-    id: '2',
-    name: 'Administrador',
-    email: 'admin@pos.com',
-    roles: ['admin', 'vendedor_caja']
-  }
-]
-
-const saveSettings = () => {
-  // Mock save - in real app, this would make an API call
-  alert('Configuración guardada exitosamente')
+const logout = () => {
+  authStore.logout()
+  success('Sesión cerrada correctamente')
+  router.push('/login')
 }
 </script>

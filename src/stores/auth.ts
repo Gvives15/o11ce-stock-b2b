@@ -1,143 +1,123 @@
 import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import axios from 'axios'
+import axiosClient from '@/lib/axiosClient'
 
 interface User {
-  id: string
-  email: string
-  name: string
+  id: number
+  username: string
   roles: string[]
 }
 
-interface AuthState {
-  user: User | null
-  accessToken: string | null
-  refreshToken: string | null
-  isAuthenticated: boolean
+interface LoginCredentials {
+  username: string
+  password: string
 }
 
-export const useAuthStore = defineStore('auth', {
-  state: (): AuthState => ({
-    user: null,
-    accessToken: localStorage.getItem('access_token'),
-    refreshToken: localStorage.getItem('refresh_token'),
-    isAuthenticated: false
-  }),
+export const useAuthStore = defineStore('auth', () => {
+  const user = ref<User | null>(null)
+  const accessToken = ref<string | null>(localStorage.getItem('access_token'))
+  const refreshToken = ref<string | null>(localStorage.getItem('refresh_token'))
+  const isLoading = ref(false)
 
-  getters: {
-    roles: (state) => state.user?.roles || [],
-    isAdmin: (state) => state.user?.roles.includes('admin') || false,
-    isVendedor: (state) => state.user?.roles.includes('vendedor_caja') || false
-  },
+  const isAuthenticated = computed(() => !!accessToken.value && !!user.value)
+  const userRoles = computed(() => user.value?.roles || [])
 
-  actions: {
-    // Token management methods
-    getAccess(): string | null {
-      return this.accessToken
-    },
+  // Función para establecer tokens
+  const setTokens = (access: string, refresh: string) => {
+    accessToken.value = access
+    refreshToken.value = refresh
+    localStorage.setItem('access_token', access)
+    localStorage.setItem('refresh_token', refresh)
+  }
 
-    getRefresh(): string | null {
-      return this.refreshToken
-    },
+  // Login real con /auth/login
+  const login = async (username: string, password: string) => {
+    isLoading.value = true
+    try {
+      const authBaseURL = import.meta.env.VITE_AUTH_BASE_URL || 'http://localhost:8000/api'
+      const response = await axios.post(`${authBaseURL}/auth/login/`, {
+        username,
+        password
+      })
 
-    setToken(access: string) {
-      this.accessToken = access
-      localStorage.setItem('access_token', access)
-    },
+      const { access, refresh } = response.data
+      setTokens(access, refresh)
 
-    setRefresh(refresh?: string) {
-      if (refresh) {
-        this.refreshToken = refresh
-        localStorage.setItem('refresh_token', refresh)
-      }
-    },
+      // Cargar perfil del usuario después del login
+      await loadProfile()
 
-    setTokens(access: string, refresh?: string) {
-      this.setToken(access)
-      if (refresh) {
-        this.setRefresh(refresh)
-      }
-    },
-
-    async login(email: string, password: string) {
-      // Mock authentication - in real app, this would be an API call
-      const mockUsers = {
-        'vendedor@pos.com': {
-          id: '1',
-          email: 'vendedor@pos.com',
-          name: 'Vendedor POS',
-          roles: ['vendedor_caja']
-        },
-        'admin@pos.com': {
-          id: '2',
-          email: 'admin@pos.com',
-          name: 'Administrador',
-          roles: ['admin', 'vendedor_caja']
-        }
-      }
-
-      const user = mockUsers[email as keyof typeof mockUsers]
+      return true
+    } catch (error: any) {
+      // Limpiar tokens en caso de error
+      logout()
       
-      if (!user || password !== (email.includes('admin') ? 'admin123' : 'password123')) {
-        throw new Error('Credenciales inválidas')
+      if (error.response?.status === 400 || error.response?.status === 401) {
+        throw new Error('Usuario o clave inválidos')
       }
-
-      // Mock tokens
-      const mockAccessToken = `mock_access_${Date.now()}`
-      const mockRefreshToken = `mock_refresh_${Date.now()}`
-
-      this.user = user
-      this.setTokens(mockAccessToken, mockRefreshToken)
-      this.isAuthenticated = true
-
-      return { user, access: mockAccessToken, refresh: mockRefreshToken }
-    },
-
-    async loadProfile() {
-      if (!this.accessToken) {
-        throw new Error('No access token')
-      }
-
-      // Mock profile loading - in real app, this would be an API call
-      // For now, decode user from stored token or use existing user
-      if (!this.user && this.accessToken) {
-        // Mock user based on token
-        const isAdmin = this.accessToken.includes('admin')
-        this.user = isAdmin ? {
-          id: '2',
-          email: 'admin@pos.com',
-          name: 'Administrador',
-          roles: ['admin', 'vendedor_caja']
-        } : {
-          id: '1',
-          email: 'vendedor@pos.com',
-          name: 'Vendedor POS',
-          roles: ['vendedor_caja']
-        }
-      }
-      
-      this.isAuthenticated = true
-      return this.user
-    },
-
-    logout() {
-      this.user = null
-      this.accessToken = null
-      this.refreshToken = null
-      this.isAuthenticated = false
-      
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-    },
-
-    // Initialize auth state from localStorage
-    initializeAuth() {
-      const token = localStorage.getItem('access_token')
-      const refresh = localStorage.getItem('refresh_token')
-      
-      if (token) {
-        this.accessToken = token
-        this.refreshToken = refresh
-        // Profile will be loaded by router guard
-      }
+      throw new Error('Error al iniciar sesión')
+    } finally {
+      isLoading.value = false
     }
+  }
+
+  // Cargar perfil del usuario con /auth/me
+  const loadProfile = async () => {
+    try {
+      const authBaseURL = import.meta.env.VITE_AUTH_BASE_URL || 'http://localhost:8000/api'
+      const token = localStorage.getItem('access_token')
+      const response = await axios.get(`${authBaseURL}/auth/me/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      })
+      user.value = response.data
+      localStorage.setItem('user_data', JSON.stringify(response.data))
+      return true
+    } catch (error) {
+      logout()
+      return false
+    }
+  }
+
+  const logout = () => {
+    user.value = null
+    accessToken.value = null
+    refreshToken.value = null
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('user_data')
+  }
+
+  const checkAuth = async () => {
+    if (!accessToken.value) return false
+    return await loadProfile()
+  }
+
+  const hasRole = (requiredRole: string | string[]) => {
+    if (!user.value?.roles) return false
+    
+    if (Array.isArray(requiredRole)) {
+      return requiredRole.some(role => user.value!.roles.includes(role))
+    }
+    
+    return user.value.roles.includes(requiredRole)
+  }
+
+  return {
+    user,
+    accessToken,
+    refreshToken,
+    isLoading,
+    isAuthenticated,
+    userRoles,
+    setTokens,
+    login,
+    logout,
+    loadProfile,
+    checkAuth,
+    hasRole
   }
 })
