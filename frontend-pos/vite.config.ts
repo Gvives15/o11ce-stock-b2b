@@ -15,6 +15,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     cors: true,
+    allowedHosts: ['pos_frontend', 'localhost', '127.0.0.1', '0.0.0.0'],
     proxy: {
       // Proxy para desarrollo si es necesario
       '/api': {
