@@ -1,0 +1,82 @@
+{
+    "tabs": {
+        "00": {
+            "tab_id": "00",
+            "cwd": "/workspace",
+            "observer": {
+                "block": "Terminal",
+                "uuid": "fa113b03-7b90-4629-b04e-b3a25b60d681",
+                "enable_llm_stream": false,
+                "callback_url": ""
+            },
+            "shell_command": [
+                "bash"
+            ],
+            "command_terminator": "\n"
+        },
+        "01": {
+            "tab_id": "01",
+            "cwd": "/workspace",
+            "observer": {
+                "block": "Terminal",
+                "uuid": "c338e3d7-ed00-42a0-a20d-3eb639472510",
+                "enable_llm_stream": false,
+                "callback_url": ""
+            },
+            "shell_command": [
+                "bash"
+            ],
+            "command_terminator": "\n"
+        },
+        "02": {
+            "tab_id": "02",
+            "cwd": "/workspace",
+            "observer": {
+                "block": "Terminal",
+                "uuid": "de6abb82-055f-4b8e-9d8f-d93811255f39",
+                "enable_llm_stream": false,
+                "callback_url": ""
+            },
+            "shell_command": [
+                "bash"
+            ],
+            "command_terminator": "\n"
+        },
+        "03": {
+            "tab_id": "03",
+            "cwd": "/workspace",
+            "observer": {
+                "block": "Terminal",
+                "uuid": "4b108cf5-01fb-430a-a870-4e35cfbc190b",
+                "enable_llm_stream": false,
+                "callback_url": ""
+            },
+            "shell_command": [
+                "bash"
+            ],
+            "command_terminator": "\n"
+        },
+        "04": {
+            "tab_id": "04",
+            "cwd": "/workspace",
+            "observer": {
+                "block": "Terminal",
+                "uuid": "ad0a4fa2-9e5b-452a-b41d-fd03edaf86ee",
+                "enable_llm_stream": false,
+                "callback_url": ""
+            },
+            "shell_command": [
+                "bash"
+            ],
+            "command_terminator": "\n"
+        }
+    },
+    "current_tab_id": "04",
+    "forbidden_commands": {
+        "run preview": "Use Deployer.deploy_to_public instead.",
+        "serve ": "Use Deployer.deploy_to_public instead.",
+        "python -m http.server": "Use python -u -m http.server port_number instead."
+    },
+    "timeout": 300.0,
+    "working_dir": "/workspace"
+}
