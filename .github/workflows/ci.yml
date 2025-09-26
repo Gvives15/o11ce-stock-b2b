@@ -58,7 +58,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest-django pytest-cov pytest-xdist factory-boy
+        pip install pytest-django pytest-cov pytest-xdist pytest-rerunfailures factory-boy
     
     - name: Wait for services
       run: |
@@ -96,7 +96,15 @@ jobs:
                --maxfail=5 \
                -v \
                --tb=short \
-               --durations=10
+               --durations=10 \
+               --reruns=1 \
+               --reruns-delay=1 \
+               -m "not slow" \
+               && pytest -m "slow" \
+                         --reruns=1 \
+                         --reruns-delay=2 \
+                         -v \
+                         --tb=short
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3

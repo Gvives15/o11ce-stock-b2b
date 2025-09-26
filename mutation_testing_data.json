@@ -1,0 +1,121 @@
+{
+  "mutation_score": 68.75,
+  "total_mutations": 16,
+  "killed_mutations": 11,
+  "survived_mutations": 5,
+  "target_achieved": true,
+  "results": [
+    {
+      "mutation_id": "mut_1",
+      "line_number": 26,
+      "original_code": "*",
+      "mutated_code": "+",
+      "killed": true
+    },
+    {
+      "mutation_id": "mut_2",
+      "line_number": 26,
+      "original_code": "/",
+      "mutated_code": "*",
+      "killed": true
+    },
+    {
+      "mutation_id": "mut_3",
+      "line_number": 27,
+      "original_code": "-",
+      "mutated_code": "+",
+      "killed": true
+    },
+    {
+      "mutation_id": "mut_4",
+      "line_number": 21,
+      "original_code": "<=",
+      "mutated_code": "<",
+      "killed": false
+    },
+    {
+      "mutation_id": "mut_5",
+      "line_number": 21,
+      "original_code": "<=",
+      "mutated_code": "==",
+      "killed": false
+    },
+    {
+      "mutation_id": "mut_6",
+      "line_number": 23,
+      "original_code": "<",
+      "mutated_code": "<=",
+      "killed": false
+    },
+    {
+      "mutation_id": "mut_7",
+      "line_number": 23,
+      "original_code": ">",
+      "mutated_code": ">=",
+      "killed": false
+    },
+    {
+      "mutation_id": "mut_8",
+      "line_number": 26,
+      "original_code": "100",
+      "mutated_code": "10",
+      "killed": true
+    },
+    {
+      "mutation_id": "mut_9",
+      "line_number": 26,
+      "original_code": "100",
+      "mutated_code": "1000",
+      "killed": true
+    },
+    {
+      "mutation_id": "mut_10",
+      "line_number": 30,
+      "original_code": "discounted_price",
+      "mutated_code": "price",
+      "killed": true
+    },
+    {
+      "mutation_id": "mut_11",
+      "line_number": 79,
+      "original_code": "not",
+      "mutated_code": "",
+      "killed": true
+    },
+    {
+      "mutation_id": "mut_12",
+      "line_number": 88,
+      "original_code": "not",
+      "mutated_code": "",
+      "killed": true
+    },
+    {
+      "mutation_id": "mut_13",
+      "line_number": 86,
+      "original_code": "\"discount\"",
+      "mutated_code": "\"benefit\"",
+      "killed": true
+    },
+    {
+      "mutation_id": "mut_14",
+      "line_number": 92,
+      "original_code": "'-value'",
+      "mutated_code": "'value'",
+      "killed": false
+    },
+    {
+      "mutation_id": "mut_15",
+      "line_number": 80,
+      "original_code": "product.price",
+      "mutated_code": "Decimal('0')",
+      "killed": true
+    },
+    {
+      "mutation_id": "mut_16",
+      "line_number": 95,
+      "original_code": "apply_discount(product.price, best_benefit.value)",
+      "mutated_code": "product.price",
+      "killed": true
+    }
+  ]
+}

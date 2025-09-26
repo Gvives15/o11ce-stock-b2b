@@ -18,6 +18,10 @@ class Product(TimeStampedModel):
         KILOGRAM = "KG", "Kilogramo"
         LITER = "LT", "Litro"
 
+    class Segment(models.TextChoices):
+        WHOLESALE = "wholesale", "Wholesale"
+        RETAIL = "retail", "Retail"
+
     code = models.CharField(max_length=32, unique=True, db_index=True)
     name = models.CharField(max_length=160, db_index=True)
     brand = models.CharField(max_length=80, blank=True)
@@ -25,6 +29,7 @@ class Product(TimeStampedModel):
     category = models.CharField(max_length=80, blank=True)
     price = models.DecimalField(max_digits=12, decimal_places=2)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=21)  # %
+    segment = models.CharField(max_length=16, choices=Segment.choices, null=True, blank=True, help_text="Segmento de mercado objetivo (opcional)")
     low_stock_threshold = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
     pack_size = models.IntegerField(null=True, blank=True, help_text="Número de unidades por paquete")
     is_active = models.BooleanField(default=True)

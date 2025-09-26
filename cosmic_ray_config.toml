@@ -1,0 +1,31 @@
+[cosmic-ray]
+module-path = "apps/catalog/utils.py"
+baseline = 10
+
+[cosmic-ray.distributor]
+name = "local"
+
+[cosmic-ray.test-runner]
+name = "unittest"
+args = ["python", "-m", "unittest", "apps.catalog.tests.api.test_products_pricing"]
+
+[cosmic-ray.execution-engine]
+name = "local"
+
+[cosmic-ray.cloning]
+method = "copy"
+commands = []
+
+[cosmic-ray.filters]
+operators = [
+    "core/ReplaceBinaryOperator",
+    "core/ReplaceComparisonOperator", 
+    "core/ReplaceUnaryOperator",
+    "core/ReplaceTrueWithFalse",
+    "core/ReplaceFalseWithTrue",
+    "core/ReplaceAndWithOr",
+    "core/ReplaceOrWithAnd"
+]
+
+[cosmic-ray.interceptor]
+enabled = false

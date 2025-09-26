@@ -5,7 +5,7 @@ Este módulo define métricas personalizadas de Prometheus para monitorear
 aspectos específicos del negocio como órdenes creadas y lotes próximos a vencer.
 """
 
-from prometheus_client import Counter, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -21,6 +21,26 @@ near_expiry_lots = Gauge(
     'near_expiry_lots',
     'Number of lots that are near expiry (within 30 days)',
     ['product_category', 'days_to_expiry_range']
+)
+
+# Métricas de pricing y observabilidad crítica
+pricing_calculations_total = Counter(
+    'pricing_calculations_total',
+    'Total number of pricing calculations performed',
+    ['segment', 'calculation_type', 'product_category']
+)
+
+pricing_errors_total = Counter(
+    'pricing_errors_total',
+    'Total number of pricing calculation errors',
+    ['segment', 'error_type', 'product_category']
+)
+
+pricing_calculation_duration_seconds = Histogram(
+    'pricing_calculation_duration_seconds',
+    'Time spent calculating product pricing',
+    ['segment', 'calculation_type'],
+    buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
 )
 
 # Métricas generales del sistema
@@ -161,6 +181,98 @@ def update_near_expiry_lots(product_category='unknown', days_range='0-7', count=
             count=count
         )
 
+def increment_pricing_calculation(segment='unknown', calculation_type='final_price', product_category='unknown'):
+    """
+    Incrementa el contador de cálculos de pricing.
+    
+    Args:
+        segment (str): Segmento del cliente ('retail', 'wholesale', 'unknown')
+        calculation_type (str): Tipo de cálculo ('final_price', 'discount', 'benefit')
+        product_category (str): Categoría del producto
+    """
+    try:
+        pricing_calculations_total.labels(
+            segment=segment,
+            calculation_type=calculation_type,
+            product_category=product_category
+        ).inc()
+        
+        logger.info(
+            "pricing_calculation_incremented",
+            segment=segment,
+            calculation_type=calculation_type,
+            product_category=product_category
+        )
+    except Exception as e:
+        logger.error(
+            "error_incrementing_pricing_calculation",
+            error=str(e),
+            segment=segment,
+            calculation_type=calculation_type,
+            product_category=product_category
+        )
+
+def increment_pricing_error(segment='unknown', error_type='calculation_error', product_category='unknown'):
+    """
+    Incrementa el contador de errores de pricing.
+    
+    Args:
+        segment (str): Segmento del cliente ('retail', 'wholesale', 'unknown')
+        error_type (str): Tipo de error ('calculation_error', 'invalid_segment', 'missing_data')
+        product_category (str): Categoría del producto
+    """
+    try:
+        pricing_errors_total.labels(
+            segment=segment,
+            error_type=error_type,
+            product_category=product_category
+        ).inc()
+        
+        logger.error(
+            "pricing_error_incremented",
+            segment=segment,
+            error_type=error_type,
+            product_category=product_category
+        )
+    except Exception as e:
+        logger.error(
+            "error_incrementing_pricing_error",
+            error=str(e),
+            segment=segment,
+            error_type=error_type,
+            product_category=product_category
+        )
+
+def observe_pricing_duration(duration_seconds, segment='unknown', calculation_type='final_price'):
+    """
+    Registra la duración de un cálculo de pricing.
+    
+    Args:
+        duration_seconds (float): Duración del cálculo en segundos
+        segment (str): Segmento del cliente ('retail', 'wholesale', 'unknown')
+        calculation_type (str): Tipo de cálculo ('final_price', 'discount', 'benefit')
+    """
+    try:
+        pricing_calculation_duration_seconds.labels(
+            segment=segment,
+            calculation_type=calculation_type
+        ).observe(duration_seconds)
+        
+        logger.info(
+            "pricing_duration_observed",
+            duration_seconds=duration_seconds,
+            segment=segment,
+            calculation_type=calculation_type
+        )
+    except Exception as e:
+        logger.error(
+            "error_observing_pricing_duration",
+            error=str(e),
+            duration_seconds=duration_seconds,
+            segment=segment,
+            calculation_type=calculation_type
+        )
+
 def get_metrics_summary():
     """
     Retorna un resumen de las métricas actuales para debugging.
@@ -172,6 +284,8 @@ def get_metrics_summary():
         # Obtener valores actuales de las métricas
         orders_samples = list(orders_placed_total.collect())[0].samples
         expiry_samples = list(near_expiry_lots.collect())[0].samples
+        pricing_calc_samples = list(pricing_calculations_total.collect())[0].samples
+        pricing_error_samples = list(pricing_errors_total.collect())[0].samples
         
         return {
             'orders_placed_total': [
@@ -185,6 +299,18 @@ def get_metrics_summary():
                     'labels': sample.labels,
                     'value': sample.value
                 } for sample in expiry_samples
+            ],
+            'pricing_calculations_total': [
+                {
+                    'labels': sample.labels,
+                    'value': sample.value
+                } for sample in pricing_calc_samples
+            ],
+            'pricing_errors_total': [
+                {
+                    'labels': sample.labels,
+                    'value': sample.value
+                } for sample in pricing_error_samples
             ]
         }
     except Exception as e:

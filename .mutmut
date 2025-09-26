@@ -1,0 +1,24 @@
+[mutmut]
+# Paths to mutate (focus on catalog module for Block 4)
+paths_to_mutate = apps/catalog/api.py,apps/catalog/utils.py,apps/catalog/models.py,apps/catalog/pricing.py
+
+# Test command
+runner = python manage.py test apps.catalog.tests.api
+
+# Timeout for each test run (seconds)
+test_time_multiplier = 2.0
+
+# Skip equivalent mutants
+skip_equivalent_mutants = true
+
+# Use multiprocessing
+use_multiprocessing = true
+
+# Number of processes
+processes = 4
+
+# Backup original files
+backup = true
+
+# Show progress
+show_times = true

@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import pytest
 from django.test import TestCase, TransactionTestCase
 from django.contrib.auth import get_user_model
 
@@ -737,3 +738,141 @@ class FEFOConcurrencyTestCase(TransactionTestCase):
         # Verificar que el stock final es correcto
         small_lot.refresh_from_db()
         self.assertEqual(small_lot.qty_on_hand, Decimal('10.000'))  # 100 - 90
+
+    @pytest.mark.slow
+    def test_8x_concurrent_sales_exact_consumption_fefo_order(self):
+        """Test 8 ventas simultáneas: suma exacta, nunca negativo, orden FEFO respetado."""
+        # Crear múltiples lotes con diferentes fechas de vencimiento
+        today = date.today()
+        
+        # Lote que vence primero (30 días)
+        lot_early = StockLot.objects.create(
+            product=self.product,
+            warehouse=self.warehouse,
+            lot_code='EARLY-8X-001',
+            expiry_date=today + timedelta(days=30),
+            qty_on_hand=Decimal('150.000'),
+            unit_cost=Decimal('10.00')
+        )
+        
+        # Lote que vence después (60 días)
+        lot_middle = StockLot.objects.create(
+            product=self.product,
+            warehouse=self.warehouse,
+            lot_code='MIDDLE-8X-001',
+            expiry_date=today + timedelta(days=60),
+            qty_on_hand=Decimal('150.000'),
+            unit_cost=Decimal('10.00')
+        )
+        
+        # Lote que vence último (90 días)
+        lot_late = StockLot.objects.create(
+            product=self.product,
+            warehouse=self.warehouse,
+            lot_code='LATE-8X-001',
+            expiry_date=today + timedelta(days=90),
+            qty_on_hand=Decimal('150.000'),
+            unit_cost=Decimal('10.00')
+        )
+        
+        # Eliminar el lote original del setUp para evitar interferencia
+        self.lot.delete()
+        
+        results = []
+        errors = []
+        
+        def concurrent_sale(worker_id):
+            """Función que ejecuta cada venta concurrente."""
+            try:
+                allocation = FEFOService.allocate_stock_fefo(
+                    product_id=self.product.id,
+                    qty_needed=Decimal('50.000'),  # 8 x 50 = 400 total
+                    user_id=self.user.id,
+                    warehouse_id=self.warehouse.id,
+                    reason=f"Concurrent sale {worker_id}"
+                )
+                results.append((worker_id, allocation))
+            except Exception as e:
+                errors.append((worker_id, str(e)))
+        
+        # Ejecutar exactamente 8 ventas simultáneas
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = [
+                executor.submit(concurrent_sale, i) 
+                for i in range(8)
+            ]
+            
+            # Esperar a que todos terminen
+            for future in as_completed(futures):
+                future.result()
+        
+        # Verificar resultados
+        lot_early.refresh_from_db()
+        lot_middle.refresh_from_db()
+        lot_late.refresh_from_db()
+        
+        # 1. Verificar que nunca hay stock negativo
+        self.assertGreaterEqual(lot_early.qty_on_hand, Decimal('0'))
+        self.assertGreaterEqual(lot_middle.qty_on_hand, Decimal('0'))
+        self.assertGreaterEqual(lot_late.qty_on_hand, Decimal('0'))
+        
+        # 2. Verificar suma total consumida exacta
+        successful_sales = len(results)
+        total_consumed = successful_sales * Decimal('50.000')
+        
+        early_consumed = Decimal('150.000') - lot_early.qty_on_hand
+        middle_consumed = Decimal('150.000') - lot_middle.qty_on_hand
+        late_consumed = Decimal('150.000') - lot_late.qty_on_hand
+        
+        actual_total_consumed = early_consumed + middle_consumed + late_consumed
+        self.assertEqual(actual_total_consumed, total_consumed)
+        
+        # 3. Verificar orden FEFO respetado (fechas consumidas)
+        # El lote que vence primero debe consumirse primero
+        if total_consumed <= Decimal('150.000'):
+            # Si el total es <= 150, solo se debe usar el lote early
+            self.assertEqual(early_consumed, total_consumed)
+            self.assertEqual(middle_consumed, Decimal('0'))
+            self.assertEqual(late_consumed, Decimal('0'))
+        elif total_consumed <= Decimal('300.000'):
+            # Si el total es <= 300, se usa early completo y parte de middle
+            self.assertEqual(early_consumed, Decimal('150.000'))
+            self.assertEqual(middle_consumed, total_consumed - Decimal('150.000'))
+            self.assertEqual(late_consumed, Decimal('0'))
+        else:
+            # Si el total es > 300, se usan early y middle completos y parte de late
+            self.assertEqual(early_consumed, Decimal('150.000'))
+            self.assertEqual(middle_consumed, Decimal('150.000'))
+            self.assertEqual(late_consumed, total_consumed - Decimal('300.000'))
+        
+        # 4. Verificar que se crearon los movimientos correctos
+        movements = Movement.objects.filter(
+            type=Movement.Type.EXIT,
+            product=self.product
+        ).order_by('created_at')
+        
+        self.assertEqual(movements.count(), successful_sales)
+        
+        # 5. Verificar que los movimientos respetan FEFO por fecha de lote
+        for movement in movements:
+            lot = movement.lot
+            # Verificar que no se usó un lote con fecha posterior si hay stock en lotes anteriores
+            earlier_lots = StockLot.objects.filter(
+                product=self.product,
+                warehouse=self.warehouse,
+                expiry_date__lt=lot.expiry_date,
+                qty_on_hand__gt=0
+            )
+            
+            # Si hay lotes anteriores con stock, algo está mal con FEFO
+            if earlier_lots.exists():
+                # Permitir solo si el lote anterior se agotó en esta misma transacción
+                for earlier_lot in earlier_lots:
+                    earlier_movements = Movement.objects.filter(
+                        type=Movement.Type.EXIT,
+                        lot=earlier_lot,
+                        created_at__lte=movement.created_at
+                    )
+                    earlier_consumed = sum(m.qty for m in earlier_movements)
+                    # El lote anterior debe haberse agotado antes o al mismo tiempo
+                    self.assertGreaterEqual(earlier_consumed, Decimal('150.000') - earlier_lot.qty_on_hand)

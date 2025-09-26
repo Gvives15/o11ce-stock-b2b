@@ -3,17 +3,21 @@
 import pytest
 from decimal import Decimal
 from datetime import date, timedelta
-from django.test import Client
-from django.urls import reverse
+from django.test import TestCase, Client
+from django.db import transaction
+from decimal import Decimal
+
 from apps.catalog.models import Product, Benefit
 
 
-@pytest.mark.django_db
-class TestProductsAPI:
-    """Tests for /products API endpoint."""
+class TestProductsAPI(TestCase):
+    """Test cases for Products API endpoints."""
     
-    def setup_method(self):
-        """Set up test data."""
+    def setUp(self):
+        """Set up test data with clean database."""
+        # Clear all existing products to ensure clean state
+        Product.objects.all().delete()
+        
         self.client = Client()
         
         # Create test products
@@ -60,11 +64,29 @@ class TestProductsAPI:
     
     def test_search_products_by_name(self):
         """Test product search by name."""
+        # First, let's see what products exist in the database
+        all_products = Product.objects.all()
+        print(f"DEBUG: Total products in DB: {all_products.count()}")
+        for p in all_products:
+            print(f"DEBUG: Product: {p.name} ({p.code}) - Active: {p.is_active}")
+        
+        # Now test the API call
         response = self.client.get("/api/v1/catalog/products?search=coca")
+        print(f"DEBUG: Response status: {response.status_code}")
+        print(f"DEBUG: Response headers: {dict(response.headers)}")
         
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 1
+        
+        # Debug: Let's see what we're getting
+        print(f"DEBUG: Response data: {data}")
+        print(f"DEBUG: Number of results: {len(data)}")
+        for i, item in enumerate(data):
+            print(f"DEBUG: Item {i}: {item.get('name', 'NO NAME')} - {item.get('code', 'NO CODE')}")
+        
+        # The test is expecting 1 result but getting 3
+        # Let's check if there are other products with "coca" in the name
+        assert len(data) == 1  # Change back to original expectation
         assert data[0]["name"] == "Coca Cola 355ml"
     
     def test_search_products_by_code(self):

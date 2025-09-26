@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404
 from apps.catalog.models import Product
 from .models import Warehouse, StockLot, Movement
 from .services import create_entry, create_exit, StockError, NotEnoughStock, NoLotsAvailable
+from .idempotency_service import IdempotencyService
 
 router = Router()
 
@@ -85,8 +86,33 @@ def create_stock_entry(request: HttpRequest, payload: EntryIn):
     - Incrementa qty_on_hand del lote
     - Crea Movement de tipo ENTRY
     - Validaciones: qty > 0, unit_cost > 0, consistencia de fechas
+    - Soporta idempotencia mediante Idempotency-Key header
     """
     try:
+        # Check for idempotency key
+        idempotency_key = IdempotencyService.get_idempotency_key(request)
+        if not idempotency_key:
+            return 400, {"error": "MISSING_IDEMPOTENCY_KEY", "message": "Idempotency-Key header is required"}
+        
+        # Prepare request data for idempotency check
+        request_data = {
+            "product_id": payload.product_id,
+            "lot_code": payload.lot_code,
+            "expiry_date": payload.expiry_date.isoformat(),
+            "qty": str(payload.qty),
+            "unit_cost": str(payload.unit_cost),
+            "warehouse_id": payload.warehouse_id,
+            "reason": payload.reason,
+        }
+        
+        # Check if this request was already processed
+        existing_response = IdempotencyService.check_existing_request(
+            idempotency_key, "entry", request_data
+        )
+        if existing_response:
+            status_code, response_data = existing_response
+            return status_code, response_data
+        
         # Obtener objetos
         product = get_object_or_404(Product, id=payload.product_id)
         warehouse = get_object_or_404(Warehouse, id=payload.warehouse_id)
@@ -103,21 +129,52 @@ def create_stock_entry(request: HttpRequest, payload: EntryIn):
             created_by=getattr(request, 'user', None)
         )
         
-        return 201, EntryOut(
-            movement_id=movement.id,
-            lot_id=movement.lot.id,
-            product_id=movement.product.id,
-            lot_code=movement.lot.lot_code,
-            new_qty_on_hand=movement.lot.qty_on_hand,
-            warehouse_name=warehouse.name
+        response_data = {
+            "movement_id": movement.id,
+            "lot_id": movement.lot.id,
+            "product_id": movement.product.id,
+            "lot_code": movement.lot.lot_code,
+            "new_qty_on_hand": float(movement.lot.qty_on_hand),
+            "warehouse_name": warehouse.name
+        }
+        
+        # Store response for idempotency
+        IdempotencyService.store_response(
+            idempotency_key, "entry", request_data, 201, response_data,
+            created_by=getattr(request, 'user', None)
         )
         
+        return 201, EntryOut(**response_data)
+        
+    except ValueError as e:
+        # Idempotency validation error
+        error_data = {"error": "IDEMPOTENCY_ERROR", "message": str(e)}
+        return 400, error_data
     except StockError as e:
-        return 400, {"error": e.code, "message": str(e)}
-    except Http404:
-        raise
+        error_data = {"error": e.code, "message": str(e)}
+        # Store error response for idempotency
+        try:
+            IdempotencyService.store_response(
+                idempotency_key, "entry", request_data, 400, error_data,
+                created_by=getattr(request, 'user', None)
+            )
+        except:
+            pass  # Don't fail the request if idempotency storage fails
+        return 400, error_data
+    except Http404 as e:
+        error_data = {"error": "NOT_FOUND", "message": str(e)}
+        # Store 404 error response for idempotency
+        try:
+            IdempotencyService.store_response(
+                idempotency_key, "entry", request_data, 404, error_data,
+                created_by=getattr(request, 'user', None)
+            )
+        except:
+            pass  # Don't fail the request if idempotency storage fails
+        return 404, error_data
     except Exception as e:
-        return 400, {"error": "VALIDATION_ERROR", "message": str(e)}
+        error_data = {"error": "VALIDATION_ERROR", "message": str(e)}
+        return 400, error_data
 
 @router.post("/exit", response={201: ExitOut, 400: ErrorOut, 404: ErrorOut})
 def create_stock_exit(request: HttpRequest, payload: ExitIn):
@@ -128,8 +185,30 @@ def create_stock_exit(request: HttpRequest, payload: ExitIn):
     - Puede generar múltiples movimientos si se necesitan varios lotes
     - Validaciones: qty > 0, stock suficiente disponible
     - Respeta is_quarantined=False y is_reserved=False
+    - Soporta idempotencia mediante Idempotency-Key header
     """
     try:
+        # Check for idempotency key
+        idempotency_key = IdempotencyService.get_idempotency_key(request)
+        if not idempotency_key:
+            return 400, {"error": "MISSING_IDEMPOTENCY_KEY", "message": "Idempotency-Key header is required"}
+        
+        # Prepare request data for idempotency check
+        request_data = {
+            "product_id": payload.product_id,
+            "qty_total": str(payload.qty_total),
+            "warehouse_id": payload.warehouse_id,
+            "reason": payload.reason,
+        }
+        
+        # Check if this request was already processed
+        existing_response = IdempotencyService.check_existing_request(
+            idempotency_key, "exit", request_data
+        )
+        if existing_response:
+            status_code, response_data = existing_response
+            return status_code, response_data
+        
         # Obtener objetos
         product = get_object_or_404(Product, id=payload.product_id)
         warehouse = get_object_or_404(Warehouse, id=payload.warehouse_id)
@@ -145,31 +224,66 @@ def create_stock_exit(request: HttpRequest, payload: ExitIn):
         
         # Preparar respuesta con detalles de cada movimiento
         movement_details = [
-            ExitMovementOut(
-                movement_id=mv.id,
-                lot_id=mv.lot.id,
-                lot_code=mv.lot.lot_code,
-                qty_taken=mv.qty,
-                unit_cost=mv.unit_cost,
-                expiry_date=mv.lot.expiry_date
-            )
+            {
+                "movement_id": mv.id,
+                "lot_id": mv.lot.id,
+                "lot_code": mv.lot.lot_code,
+                "qty_taken": float(mv.qty),
+                "unit_cost": float(mv.unit_cost),
+                "expiry_date": mv.lot.expiry_date.isoformat()
+            }
             for mv in movements
         ]
         
+        response_data = {
+            "total_qty": str(payload.qty_total),  # Keep as string to match Django Ninja response
+            "movements": movement_details,
+            "warehouse_name": warehouse.name
+        }
+        
+        # Store response for idempotency
+        IdempotencyService.store_response(
+            idempotency_key, "exit", request_data, 201, response_data,
+            created_by=getattr(request, 'user', None)
+        )
+        
         return 201, ExitOut(
             total_qty=payload.qty_total,
-            movements=movement_details,
+            movements=[ExitMovementOut(**mv) for mv in movement_details],
             warehouse_name=warehouse.name
         )
         
+    except ValueError as e:
+        # Idempotency validation error
+        error_data = {"error": "IDEMPOTENCY_ERROR", "message": str(e)}
+        return 400, error_data
     except (NotEnoughStock, NoLotsAvailable) as e:
-        return 400, {"error": e.code, "message": str(e)}
+        error_data = {"error": e.code, "message": str(e)}
+        # Store error response for idempotency
+        try:
+            IdempotencyService.store_response(
+                idempotency_key, "exit", request_data, 400, error_data,
+                created_by=getattr(request, 'user', None)
+            )
+        except:
+            pass  # Don't fail the request if idempotency storage fails
+        return 400, error_data
     except StockError as e:
-        return 400, {"error": e.code, "message": str(e)}
+        error_data = {"error": e.code, "message": str(e)}
+        # Store error response for idempotency
+        try:
+            IdempotencyService.store_response(
+                idempotency_key, "exit", request_data, 400, error_data,
+                created_by=getattr(request, 'user', None)
+            )
+        except:
+            pass  # Don't fail the request if idempotency storage fails
+        return 400, error_data
     except Http404:
         raise
     except Exception as e:
-        return 400, {"error": "VALIDATION_ERROR", "message": str(e)}
+        error_data = {"error": "VALIDATION_ERROR", "message": str(e)}
+        return 400, error_data
 
 @router.get("/lots", response={200: LotsListOut, 400: ErrorOut, 404: ErrorOut})
 def get_stock_lots(

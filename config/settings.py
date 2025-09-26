@@ -270,6 +270,15 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ------------------------------------------------------------------------------
 API_VERSION = os.environ.get('API_VERSION', 'v1')
 
+# B2B BFF CONFIGURATION
+# ------------------------------------------------------------------------------
+BFF_VERSION = os.environ.get('BFF_VERSION', '0.1.0')
+FE_ORIGIN = os.environ.get('FE_ORIGIN', 'http://localhost:5173')
+CORE_API_BASE_URL = os.environ.get('CORE_API_BASE_URL', 'http://localhost:8001/api/v1')
+CORE_API_TIMEOUT = int(os.environ.get('CORE_API_TIMEOUT', '5'))
+CORE_API_RETRIES = int(os.environ.get('CORE_API_RETRIES', '1'))
+CORE_SERVICE_TOKEN = os.environ.get('CORE_SERVICE_TOKEN', '')
+
 # AUTHENTICATION SETTINGS
 # ------------------------------------------------------------------------------
 LOGIN_URL = '/panel/login/'

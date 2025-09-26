@@ -1,196 +1,246 @@
 """
-Motor de beneficios (MVP) - Servicio de pricing con descuentos por segmento y combo.
+Módulo de pricing para el catálogo de productos.
+Contiene lógica para calcular precios con descuentos y promociones.
 """
-from decimal import Decimal, ROUND_HALF_UP
+import time
+from decimal import Decimal
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
-from apps.catalog.models import Product
-from apps.customers.models import Customer
-from apps.catalog.utils import apply_discount
+from django.db.models import QuerySet
+from apps.catalog.models import Product, Benefit
+from apps.catalog.utils import calculate_final_price
+from apps.core.metrics import (
+    increment_pricing_calculation, 
+    increment_pricing_error, 
+    observe_pricing_duration
+)
 
 
-@dataclass
-class PricingItem:
-    """Representa un item en el pricing con producto y cantidad."""
-    product: Product
-    quantity: int
-    unit_price: Decimal = None
-    subtotal: Decimal = None
-    
-    def __post_init__(self):
-        if self.unit_price is None:
-            self.unit_price = self.product.price
-        if self.subtotal is None:
-            self.subtotal = self.unit_price * Decimal(str(self.quantity))
-
-
-@dataclass
-class ComboDiscount:
-    """Representa un descuento de combo aplicado."""
-    name: str
-    description: str
-    discount_amount: Decimal
-    items_affected: List[str]  # códigos de productos afectados
-
-
-@dataclass
-class PriceQuote:
-    """Resultado final del pricing con todos los cálculos."""
-    items: List[PricingItem]
-    subtotal: Decimal
-    segment_discount_amount: Decimal
-    combo_discounts: List[ComboDiscount]
-    total_combo_discount: Decimal
-    total: Decimal
-
-
-def apply_segment_discount(items: List[PricingItem], customer: Customer) -> Decimal:
+def apply_combo_discounts(products: List[Product], segment: str = "retail") -> Dict[str, Any]:
     """
-    Aplica descuentos por segmento de cliente.
+    Aplica descuentos por combo a una lista de productos.
     
     Args:
-        items: Lista de items con pricing
-        customer: Cliente para determinar segmento
+        products: Lista de productos para el combo
+        segment: Segmento del cliente ('retail' o 'wholesale')
         
     Returns:
-        Monto total de descuento aplicado por segmento
+        Diccionario con información del combo y descuentos aplicados
         
     Examples:
-        >>> # Mayorista obtiene -8% en P1/P2
-        >>> items = [PricingItem(product_p1, 2), PricingItem(product_p2, 1)]
-        >>> customer = Customer(segment="wholesale")
-        >>> discount = apply_segment_discount(items, customer)
+        >>> products = [Product(code='P001', price=Decimal('100')), 
+        ...            Product(code='P002', price=Decimal('50'))]
+        >>> result = apply_combo_discounts(products, 'wholesale')
+        >>> result['total_discount']
+        Decimal('12.00')  # 8% de descuento en wholesale
     """
-    if customer.segment != "wholesale":
-        return Decimal('0.00')
+    start_time = time.time()
     
-    total_discount = Decimal('0.00')
-    discount_rate = Decimal('8.00')  # 8% para mayoristas
-    
-    for item in items:
-        # Aplicar descuento solo a productos P1 y P2
-        if item.product.code.startswith(('P1-', 'P2-')):
-            item_discount = item.subtotal * (discount_rate / 100)
-            total_discount += item_discount
+    try:
+        # Incrementar contador de cálculos de combo
+        increment_pricing_calculation(
+            segment=segment,
+            calculation_type='combo_discount',
+            product_category='combo'
+        )
+        
+        if not products:
+            return {
+                'products': [],
+                'original_total': Decimal('0.00'),
+                'final_total': Decimal('0.00'),
+                'total_discount': Decimal('0.00'),
+                'combo_applied': False
+            }
+        
+        # Calcular precios individuales con descuentos
+        product_details = []
+        original_total = Decimal('0.00')
+        final_total = Decimal('0.00')
+        
+        for product in products:
+            original_price = product.price
+            final_price = calculate_final_price(product, segment)
             
-            # Actualizar precios del item
-            discounted_unit_price = apply_discount(item.unit_price, discount_rate)
-            item.unit_price = discounted_unit_price
-            item.subtotal = discounted_unit_price * Decimal(str(item.quantity))
-    
-    return total_discount
-
-
-def apply_combo_discounts(items: List[PricingItem]) -> List[ComboDiscount]:
-    """
-    Aplica descuentos por combos específicos.
-    
-    Args:
-        items: Lista de items con pricing
-        
-    Returns:
-        Lista de descuentos de combo aplicados
-        
-    Examples:
-        >>> # Combo: 1×P2 + 5×P1 → -300
-        >>> items = [PricingItem(product_p1, 5), PricingItem(product_p2, 1)]
-        >>> combos = apply_combo_discounts(items)
-    """
-    combo_discounts = []
-    
-    # Contar productos P1 y P2
-    p1_count = 0
-    p2_count = 0
-    p1_items = []
-    p2_items = []
-    
-    for item in items:
-        if item.product.code.startswith('P1-'):
-            p1_count += item.quantity
-            p1_items.append(item)
-        elif item.product.code.startswith('P2-'):
-            p2_count += item.quantity
-            p2_items.append(item)
-    
-    # Aplicar combo: 1×P2 + 5×P1 → -300
-    if p1_count >= 5 and p2_count >= 1:
-        # Calcular cuántos combos se pueden aplicar
-        max_combos = min(p1_count // 5, p2_count // 1)
-        
-        if max_combos > 0:
-            combo_discount_amount = Decimal('300.00') * max_combos
+            product_details.append({
+                'code': product.code,
+                'name': product.name,
+                'original_price': original_price,
+                'final_price': final_price,
+                'discount_applied': original_price - final_price
+            })
             
-            # Aplicar descuento proporcionalmente a los items afectados
-            affected_items = p1_items + p2_items
-            total_affected_subtotal = sum(item.subtotal for item in affected_items)
-            
-            for item in affected_items:
-                if total_affected_subtotal > 0:
-                    item_proportion = item.subtotal / total_affected_subtotal
-                    item_discount = combo_discount_amount * item_proportion
-                    item.subtotal -= item_discount
-            
-            combo_discounts.append(ComboDiscount(
-                name="Combo P1+P2",
-                description=f"Combo {max_combos}x: 1×P2 + 5×P1 → -$300 c/u",
-                discount_amount=combo_discount_amount,
-                items_affected=[item.product.code for item in affected_items]
-            ))
-    
-    return combo_discounts
-
-
-def price_quote(customer: Customer, items: List[Dict[str, Any]]) -> PriceQuote:
-    """
-    Calcula cotización completa con descuentos por segmento y combo.
-    
-    Args:
-        customer: Cliente para aplicar descuentos por segmento
-        items: Lista de diccionarios con 'product_id' y 'quantity'
+            original_total += original_price
+            final_total += final_price
         
-    Returns:
-        PriceQuote con cálculos completos
+        total_discount = original_total - final_total
+        combo_applied = total_discount > Decimal('0.00')
         
-    Examples:
-        >>> customer = Customer(segment="wholesale")
-        >>> items = [{'product_id': 1, 'quantity': 5}, {'product_id': 2, 'quantity': 1}]
-        >>> quote = price_quote(customer, items)
-        >>> print(f"Total: ${quote.total}")
-    """
-    # Convertir items a PricingItems
-    pricing_items = []
-    for item_data in items:
-        try:
-            product = Product.objects.get(id=item_data['product_id'])
-            pricing_item = PricingItem(
-                product=product,
-                quantity=item_data['quantity']
+        if combo_applied:
+            # Incrementar contador de combos aplicados
+            increment_pricing_calculation(
+                segment=segment,
+                calculation_type='combo_applied',
+                product_category='combo'
             )
-            pricing_items.append(pricing_item)
-        except Product.DoesNotExist:
-            continue  # Ignorar productos que no existen
+        
+        return {
+            'products': product_details,
+            'original_total': original_total,
+            'final_total': final_total,
+            'total_discount': total_discount,
+            'combo_applied': combo_applied,
+            'segment': segment
+        }
+        
+    except Exception as e:
+        # Incrementar contador de errores
+        increment_pricing_error(
+            segment=segment,
+            error_type='combo_calculation_error',
+            product_category='combo'
+        )
+        
+        # Devolver estructura básica en caso de error
+        return {
+            'products': [],
+            'original_total': Decimal('0.00'),
+            'final_total': Decimal('0.00'),
+            'total_discount': Decimal('0.00'),
+            'combo_applied': False,
+            'error': str(e)
+        }
+        
+    finally:
+        # Observar duración del cálculo
+        duration = time.time() - start_time
+        observe_pricing_duration(
+            duration_seconds=duration,
+            segment=segment,
+            calculation_type='combo_discount'
+        )
+
+
+def price_quote(product_codes: List[str], segment: str = "retail", quantities: Optional[List[int]] = None) -> Dict[str, Any]:
+    """
+    Genera una cotización de precios para una lista de productos.
     
-    # Calcular subtotal inicial
-    initial_subtotal = sum(item.subtotal for item in pricing_items)
+    Args:
+        product_codes: Lista de códigos de productos
+        segment: Segmento del cliente ('retail' o 'wholesale')
+        quantities: Lista de cantidades (opcional, por defecto 1 para cada producto)
+        
+    Returns:
+        Diccionario con la cotización completa
+        
+    Examples:
+        >>> quote = price_quote(['P001', 'P002'], 'wholesale', [2, 1])
+        >>> quote['total_amount']
+        Decimal('242.00')  # Precios con descuento wholesale
+    """
+    start_time = time.time()
     
-    # Aplicar descuentos por segmento
-    segment_discount_amount = apply_segment_discount(pricing_items, customer)
-    
-    # Aplicar descuentos por combo
-    combo_discounts = apply_combo_discounts(pricing_items)
-    total_combo_discount = sum(combo.discount_amount for combo in combo_discounts)
-    
-    # Calcular subtotal después de descuentos por segmento
-    subtotal_after_segment = sum(item.subtotal for item in pricing_items)
-    
-    # Calcular total final
-    total = subtotal_after_segment
-    
-    return PriceQuote(
-        items=pricing_items,
-        subtotal=initial_subtotal,
-        segment_discount_amount=segment_discount_amount,
-        combo_discounts=combo_discounts,
-        total_combo_discount=total_combo_discount,
-        total=total
-    )
+    try:
+        # Incrementar contador de cotizaciones
+        increment_pricing_calculation(
+            segment=segment,
+            calculation_type='price_quote',
+            product_category='quote'
+        )
+        
+        if not product_codes:
+            return {
+                'items': [],
+                'subtotal': Decimal('0.00'),
+                'total_discount': Decimal('0.00'),
+                'total_amount': Decimal('0.00'),
+                'segment': segment,
+                'quote_id': None
+            }
+        
+        # Establecer cantidades por defecto si no se proporcionan
+        if quantities is None:
+            quantities = [1] * len(product_codes)
+        elif len(quantities) != len(product_codes):
+            raise ValueError("La cantidad de productos y cantidades debe coincidir")
+        
+        # Obtener productos de la base de datos
+        products = Product.objects.filter(code__in=product_codes)
+        product_dict = {p.code: p for p in products}
+        
+        # Verificar que todos los productos existen
+        missing_products = set(product_codes) - set(product_dict.keys())
+        if missing_products:
+            raise ValueError(f"Productos no encontrados: {', '.join(missing_products)}")
+        
+        # Calcular precios para cada item
+        quote_items = []
+        subtotal = Decimal('0.00')
+        total_discount = Decimal('0.00')
+        
+        for code, qty in zip(product_codes, quantities):
+            product = product_dict[code]
+            original_price = product.price
+            final_price = calculate_final_price(product, segment)
+            
+            line_original = original_price * qty
+            line_final = final_price * qty
+            line_discount = line_original - line_final
+            
+            quote_items.append({
+                'product_code': code,
+                'product_name': product.name,
+                'quantity': qty,
+                'unit_price': original_price,
+                'unit_final_price': final_price,
+                'line_total': line_final,
+                'line_discount': line_discount
+            })
+            
+            subtotal += line_original
+            total_discount += line_discount
+        
+        total_amount = subtotal - total_discount
+        
+        # Incrementar contador de cotizaciones exitosas
+        increment_pricing_calculation(
+            segment=segment,
+            calculation_type='quote_success',
+            product_category='quote'
+        )
+        
+        return {
+            'items': quote_items,
+            'subtotal': subtotal,
+            'total_discount': total_discount,
+            'total_amount': total_amount,
+            'segment': segment,
+            'quote_id': f"Q-{int(time.time())}"  # ID simple basado en timestamp
+        }
+        
+    except Exception as e:
+        # Incrementar contador de errores
+        increment_pricing_error(
+            segment=segment,
+            error_type='quote_error',
+            product_category='quote'
+        )
+        
+        # Devolver estructura básica en caso de error
+        return {
+            'items': [],
+            'subtotal': Decimal('0.00'),
+            'total_discount': Decimal('0.00'),
+            'total_amount': Decimal('0.00'),
+            'segment': segment,
+            'quote_id': None,
+            'error': str(e)
+        }
+        
+    finally:
+        # Observar duración del cálculo
+        duration = time.time() - start_time
+        observe_pricing_duration(
+            duration_seconds=duration,
+            segment=segment,
+            calculation_type='price_quote'
+        )

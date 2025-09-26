@@ -31,8 +31,6 @@ services:
       start_period: 40s
     expose:
       - "8000"
-    ports:
-      - "8000:8000"
     networks:
       - app-network
 

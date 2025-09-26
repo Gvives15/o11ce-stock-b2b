@@ -14,6 +14,7 @@ from apps.orders.models import Order, OrderItem
 from apps.stock.models import Product
 from apps.stock.services import record_exit_fefo, ExitError
 from apps.catalog.models import Benefit
+from apps.notifications.models import Notification
 
 
 TWOPLACES = Decimal("0.01")
