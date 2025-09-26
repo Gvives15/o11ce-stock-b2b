@@ -1,0 +1,218 @@
+name: Mutation Testing
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'apps/catalog/utils.py'
+      - 'apps/catalog/pricing.py'
+      - 'apps/core/metrics.py'
+      - 'apps/orders/services.py'
+      - 'apps/catalog/tests/**'
+      - 'apps/orders/tests/**'
+  workflow_dispatch:
+    inputs:
+      target_module:
+        description: 'Specific module to test (optional)'
+        required: false
+        default: ''
+
+jobs:
+  mutation-test:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !contains(github.event.pull_request.title, '[skip mutation]'))
+    
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bff_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-mutation-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-mutation-
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest-django pytest-cov cosmic-ray
+    
+    - name: Wait for services
+      run: |
+        until pg_isready -h localhost -p 5432; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+        
+        until redis-cli -h localhost -p 6379 ping; do
+          echo "Waiting for Redis..."
+          sleep 2
+        done
+    
+    - name: Run migrations
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bff_test
+        REDIS_URL: redis://localhost:6379/0
+        CELERY_TASK_ALWAYS_EAGER: true
+        CELERY_TASK_EAGER_PROPAGATES: true
+      run: |
+        python manage.py migrate
+    
+    - name: Run baseline tests
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bff_test
+        REDIS_URL: redis://localhost:6379/0
+        CELERY_TASK_ALWAYS_EAGER: true
+        CELERY_TASK_EAGER_PROPAGATES: true
+        EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
+      run: |
+        pytest apps/catalog/tests/test_pricing_metrics.py \
+               apps/catalog/tests/test_utils.py \
+               -v --tb=short
+    
+    - name: Initialize Cosmic Ray session
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bff_test
+        REDIS_URL: redis://localhost:6379/0
+        CELERY_TASK_ALWAYS_EAGER: true
+        CELERY_TASK_EAGER_PROPAGATES: true
+        EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
+      run: |
+        # Determinar módulo objetivo
+        if [ -n "${{ github.event.inputs.target_module }}" ]; then
+          TARGET_MODULE="${{ github.event.inputs.target_module }}"
+        else
+          # Detectar archivos modificados en el PR
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          echo "Changed files: $CHANGED_FILES"
+          
+          if echo "$CHANGED_FILES" | grep -q "apps/catalog/pricing.py"; then
+            TARGET_MODULE="apps.catalog.pricing"
+          elif echo "$CHANGED_FILES" | grep -q "apps/catalog/utils.py"; then
+            TARGET_MODULE="apps.catalog.utils"
+          elif echo "$CHANGED_FILES" | grep -q "apps/core/metrics.py"; then
+            TARGET_MODULE="apps.core.metrics"
+          elif echo "$CHANGED_FILES" | grep -q "apps/orders/services.py"; then
+            TARGET_MODULE="apps.orders.services"
+          else
+            TARGET_MODULE="apps.catalog.pricing"  # Default fallback
+          fi
+        fi
+        
+        echo "TARGET_MODULE=$TARGET_MODULE" >> $GITHUB_ENV
+        echo "Running mutation testing on: $TARGET_MODULE"
+        
+        # Inicializar sesión de Cosmic Ray
+        cosmic-ray init cosmic-ray.toml mutation_session.sqlite
+    
+    - name: Run mutation testing
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bff_test
+        REDIS_URL: redis://localhost:6379/0
+        CELERY_TASK_ALWAYS_EAGER: true
+        CELERY_TASK_EAGER_PROPAGATES: true
+        EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
+        DJANGO_SETTINGS_MODULE: config.settings
+      run: |
+        # Ejecutar mutation testing con timeout
+        timeout 1800 cosmic-ray --verbosity=INFO exec mutation_session.sqlite || {
+          echo "Mutation testing timed out after 30 minutes"
+          exit 1
+        }
+    
+    - name: Calculate mutation score
+      id: mutation_score
+      run: |
+        MUTATION_SCORE=$(cosmic-ray dump mutation_session.sqlite | python scripts/mutation_score.py --format score_only)
+        echo "score=$MUTATION_SCORE" >> $GITHUB_OUTPUT
+        echo "MUTATION_SCORE=$MUTATION_SCORE" >> $GITHUB_ENV
+        echo "Mutation Score: $MUTATION_SCORE%"
+
+    - name: Generate mutation report
+      run: |
+        echo "## Mutation Testing Report" > mutation_report.md
+        echo "" >> mutation_report.md
+        echo "**Target Module:** ${{ env.TARGET_MODULE }}" >> mutation_report.md
+        echo "" >> mutation_report.md
+        cosmic-ray dump mutation_session.sqlite | python scripts/mutation_score.py --format summary >> mutation_report.md
+    
+    - name: Check mutation score threshold
+      run: |
+        THRESHOLD=80
+        MUTATION_SCORE=${{ steps.mutation_score.outputs.score }}
+        if (( $(echo "$MUTATION_SCORE < $THRESHOLD" | bc -l) )); then
+          echo "❌ Mutation score ($MUTATION_SCORE%) is below threshold ($THRESHOLD%)"
+          echo "This indicates that your tests may not be catching all potential bugs."
+          echo "Consider adding more comprehensive test cases."
+          exit 1
+        else
+          echo "✅ Mutation score ($MUTATION_SCORE%) meets threshold ($THRESHOLD%)"
+        fi
+    
+    - name: Upload mutation results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: mutation-testing-results
+        path: |
+          mutation_report.md
+          mutation_session.sqlite
+    
+    - name: Comment PR with results
+      uses: actions/github-script@v6
+      if: github.event_name == 'pull_request' && always()
+      with:
+        script: |
+          const fs = require('fs');
+          
+          try {
+            const report = fs.readFileSync('mutation_report.md', 'utf8');
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
+          } catch (error) {
+            console.log('Could not read mutation report:', error);
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## Mutation Testing Results\n\n❌ **Failed to generate report**\n\nMutation Score: ${process.env.MUTATION_SCORE || 'Unknown'}%\n\nCheck the workflow logs for details.`
+            });
+          }

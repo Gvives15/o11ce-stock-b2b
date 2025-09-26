@@ -1,0 +1,27 @@
+[cosmic-ray]
+# Configuración de Cosmic Ray para mutation testing
+
+# Módulos a mutar (enfocado en lógica de negocio crítica)
+module-path = "apps/catalog/pricing.py"
+
+# Directorio de tests
+test-command = "python -m pytest apps/catalog/tests/test_pricing_metrics.py -v"
+
+# Timeout para cada test (en segundos)
+timeout = 30.0
+
+# Configuración de distribución (para CI)
+[cosmic-ray.distributor]
+name = "local"
+
+# Exclusiones - patrones a ignorar
+[cosmic-ray.exclude]
+# Excluir archivos de configuración y migraciones
+patterns = [
+    "*/migrations/*",
+    "*/settings/*", 
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "manage.py"
+]
