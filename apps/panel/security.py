@@ -64,36 +64,70 @@ ROLE_SCOPE_MATRIX = {
         'has_scope_users': True,
         'has_scope_dashboard': True,
         'has_scope_inventory': True,
+        'has_scope_inventory_level_1': True,
+        'has_scope_inventory_level_2': True,
         'has_scope_orders': True,
         'has_scope_customers': True,
         'has_scope_reports': True,
         'has_scope_analytics': True,
+        'has_scope_catalog': True,
+        'has_scope_caja': True,
     },
-    'encargado_inventario': {
-        'has_scope_users': False,
+    'encargado': {
+        'has_scope_users': True,  # Supervisión de usuarios
         'has_scope_dashboard': True,
         'has_scope_inventory': True,
+        'has_scope_inventory_level_1': True,
+        'has_scope_inventory_level_2': True,
         'has_scope_orders': True,
-        'has_scope_customers': False,
-        'has_scope_reports': True,
-        'has_scope_analytics': False,
+        'has_scope_customers': True,
+        'has_scope_reports': False,  # Sin reportes
+        'has_scope_analytics': False,  # Sin analytics
+        'has_scope_catalog': True,
+        'has_scope_caja': True,
     },
     'vendedor_caja': {
         'has_scope_users': False,
         'has_scope_dashboard': True,
         'has_scope_inventory': False,
+        'has_scope_inventory_level_1': True,  # Solo nivel básico
+        'has_scope_inventory_level_2': False,
         'has_scope_orders': True,
         'has_scope_customers': True,
         'has_scope_reports': False,
         'has_scope_analytics': False,
+        'has_scope_catalog': False,
+        'has_scope_caja': True,
     },
     'vendedor_ruta': {
         'has_scope_users': False,
         'has_scope_dashboard': True,
         'has_scope_inventory': False,
+        'has_scope_inventory_level_1': True,  # Solo nivel básico
+        'has_scope_inventory_level_2': False,
         'has_scope_orders': True,
         'has_scope_customers': True,
         'has_scope_reports': False,
         'has_scope_analytics': False,
+        'has_scope_catalog': False,
+        'has_scope_caja': False,
     }
+}
+
+# Definición de SCOPES para compatibilidad con seed_roles
+SCOPES = {
+    'admin': [
+        'users', 'dashboard', 'inventory', 'inventory_level_1', 'inventory_level_2',
+        'orders', 'customers', 'reports', 'analytics', 'catalog', 'caja'
+    ],
+    'encargado': [
+        'users', 'dashboard', 'inventory', 'inventory_level_1', 'inventory_level_2',
+        'orders', 'customers', 'catalog', 'caja'
+    ],
+    'vendedor_caja': [
+        'dashboard', 'inventory_level_1', 'orders', 'customers', 'caja'
+    ],
+    'vendedor_ruta': [
+        'dashboard', 'inventory_level_1', 'orders', 'customers'
+    ]
 }

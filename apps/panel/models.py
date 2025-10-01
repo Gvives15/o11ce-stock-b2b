@@ -11,6 +11,7 @@ class Role(models.Model):
     
     ROLE_CHOICES = [
         ('admin', 'Administrador'),
+        ('encargado', 'Encargado'),
         ('vendedor_caja', 'Vendedor de Caja'),
         ('vendedor_ruta', 'Vendedor de Ruta'),
     ]
@@ -62,10 +63,14 @@ class UserScope(models.Model):
     has_scope_users = models.BooleanField(default=False, verbose_name="Gestión de Usuarios")
     has_scope_dashboard = models.BooleanField(default=True, verbose_name="Dashboard")
     has_scope_inventory = models.BooleanField(default=False, verbose_name="Inventario")
+    has_scope_inventory_level_1 = models.BooleanField(default=False, verbose_name="Inventario Nivel 1 (Básico)")
+    has_scope_inventory_level_2 = models.BooleanField(default=False, verbose_name="Inventario Nivel 2 (Completo)")
     has_scope_orders = models.BooleanField(default=False, verbose_name="Pedidos")
     has_scope_customers = models.BooleanField(default=False, verbose_name="Clientes")
     has_scope_reports = models.BooleanField(default=False, verbose_name="Reportes")
     has_scope_analytics = models.BooleanField(default=False, verbose_name="Analytics")
+    has_scope_catalog = models.BooleanField(default=False, verbose_name="Catálogo de Productos")
+    has_scope_caja = models.BooleanField(default=False, verbose_name="Gestión de Caja")
     has_scope_pos_override = models.BooleanField(default=False, verbose_name="Override POS")
     
     created_at = models.DateTimeField(auto_now_add=True)

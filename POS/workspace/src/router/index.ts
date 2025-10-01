@@ -1,16 +1,22 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import LoginView from '@/views/LoginView.vue'
-import POSView from '@/views/POSView.vue'
-import ProductsView from '@/views/ProductsView.vue'
-import SalesView from '@/views/SalesView.vue'
+import DashboardView from '@/views/DashboardView.vue'
+import CustomersView from '@/views/CustomersView.vue'
+import CajaView from '@/views/CajaView.vue'
+import CatalogView from '@/views/CatalogView.vue'
+import ReportsView from '@/views/ReportsView.vue'
+import AnalyticsView from '@/views/AnalyticsView.vue'
+import UsersView from '@/views/UsersView.vue'
+import InventoryView from '@/views/InventoryView.vue'
+import OrdersView from '@/views/OrdersView.vue'
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHistory('/pos/'),
   routes: [
     {
       path: '/',
-      redirect: '/login'
+      redirect: '/dashboard'
     },
     {
       path: '/login',
@@ -19,36 +25,81 @@ const router = createRouter({
       meta: { requiresAuth: false }
     },
     {
-      path: '/pos',
-      name: 'POS',
-      component: POSView,
+      path: '/dashboard',
+      name: 'Dashboard',
+      component: DashboardView,
       meta: { 
         requiresAuth: true,
-        roles: ['vendedor_caja', 'admin']
+        scopes: ['has_scope_dashboard']
       }
     },
     {
-      path: '/history',
-      name: 'History',
-      component: SalesView,
+      path: '/inventory',
+      name: 'Inventory',
+      component: InventoryView,
       meta: { 
         requiresAuth: true,
-        roles: ['vendedor_caja', 'admin']
+        scopes: ['has_scope_inventory']
       }
     },
     {
-      path: '/products',
-      name: 'Products',
-      component: ProductsView,
+      path: '/orders',
+      name: 'Orders',
+      component: OrdersView,
+      meta: { 
+        requiresAuth: true,
+        scopes: ['has_scope_orders']
+      }
+    },
+    {
+      path: '/customers',
+      name: 'Customers',
+      component: CustomersView,
+      meta: { 
+        requiresAuth: true,
+        scopes: ['has_scope_customers']
+      }
+    },
+    {
+      path: '/caja',
+      name: 'Caja',
+      component: CajaView,
+      meta: { 
+        requiresAuth: true,
+        scopes: ['has_scope_caja']
+      }
+    },
+    {
+      path: '/catalog',
+      name: 'Catalog',
+      component: CatalogView,
+      meta: { 
+        requiresAuth: true,
+        roles: ['admin', 'encargado']
+      }
+    },
+    {
+      path: '/reports',
+      name: 'Reports',
+      component: ReportsView,
       meta: { 
         requiresAuth: true,
         roles: ['admin']
       }
     },
     {
-      path: '/settings',
-      name: 'Settings',
-      component: () => import('@/views/SettingsView.vue'),
+      path: '/analytics',
+      name: 'Analytics',
+      component: AnalyticsView,
+      meta: { 
+        requiresAuth: true,
+        roles: ['admin']
+      }
+    },
+    {
+      path: '/users',
+      name: 'Users',
+      component: UsersView,
       meta: { 
         requiresAuth: true,
         roles: ['admin']
@@ -63,14 +114,9 @@ router.beforeEach(async (to, from, next) => {
   
   // Si la ruta no requiere autenticación, permitir acceso
   if (to.meta.requiresAuth === false) {
-    // Si ya está autenticado y va a login, redirigir según roles
-    if (authStore.isAuthenticated) {
-      const userRoles = authStore.userRoles
-      if (userRoles.includes('admin')) {
-        next('/settings')
-      } else {
-        next('/pos')
-      }
+    // Si ya está autenticado y va a login, redirigir al dashboard
+    if (authStore.isAuthenticated && to.path === '/login') {
+      next('/dashboard')
       return
     }
     next()
@@ -96,19 +142,42 @@ router.beforeEach(async (to, from, next) => {
   if (to.meta.roles && Array.isArray(to.meta.roles)) {
     const hasRequiredRole = authStore.hasRole(to.meta.roles)
     if (!hasRequiredRole) {
-      // Redirigir a una página apropiada según los roles del usuario
-      const userRoles = authStore.userRoles
-      if (userRoles.includes('admin')) {
-        next('/settings')
-      } else if (userRoles.includes('vendedor_caja')) {
-        next('/pos')
+      // Evitar redirección infinita: no redirigir a la misma ruta
+      if (to.path === from.path) {
+        next(false) // Cancelar navegación
+        return
+      }
+      
+      // Redirigir al dashboard - será el centro de redirección
+      if (to.path !== '/dashboard') {
+        next('/dashboard')
       } else {
-        next('/login')
+        next('/login') // Si no puede acceder al dashboard, ir a login
       }
       return
     }
   }
-  
+
+  // Verificar scopes si están definidos
+  if (to.meta.scopes && Array.isArray(to.meta.scopes)) {
+    const hasRequiredScope = authStore.hasScope(to.meta.scopes)
+    if (!hasRequiredScope) {
+      // Evitar redirección infinita: no redirigir a la misma ruta
+      if (to.path === from.path) {
+        next(false) // Cancelar navegación
+        return
+      }
+      
+      // Redirigir al dashboard - será el centro de redirección
+      if (to.path !== '/dashboard') {
+        next('/dashboard')
+      } else {
+        next('/login') // Si no puede acceder al dashboard, ir a login
+      }
+      return
+    }
+  }
+
   next()
 })
 

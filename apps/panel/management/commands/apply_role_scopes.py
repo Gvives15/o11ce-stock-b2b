@@ -17,6 +17,15 @@ class Command(BaseCommand):
             'has_scope_analytics': True,
             'has_scope_users': True,
         },
+        'encargado': {
+            'has_scope_dashboard': True,
+            'has_scope_inventory': True,
+            'has_scope_orders': True,
+            'has_scope_customers': True,
+            'has_scope_reports': True,
+            'has_scope_analytics': False,
+            'has_scope_users': False,
+        },
         'manager': {
             'has_scope_dashboard': True,
             'has_scope_inventory': True,
@@ -148,10 +157,10 @@ class Command(BaseCommand):
             
             if changes_made:
                 if dry_run:
-                    self.stdout.write(f'  {user.username}: {', '.join(changes_log)}')
+                    self.stdout.write(f'  {user.username}: {", ".join(changes_log)}')
                 else:
                     user_scope.save()
-                    self.stdout.write(f'  Actualizado {user.username}: {', '.join(changes_log)}')
+                    self.stdout.write(f'  Actualizado {user.username}: {", ".join(changes_log)}')
                 updated_count += 1
             else:
                 self.stdout.write(f'  {user.username}: Sin cambios necesarios')

@@ -3,9 +3,33 @@ import { ref, computed } from 'vue'
 import axios from 'axios'
 import axiosClient from '@/lib/axiosClient'
 
+interface UserScopes {
+  has_scope_users: boolean
+  has_scope_dashboard: boolean
+  has_scope_inventory: boolean
+  has_scope_inventory_level_1: boolean
+  has_scope_inventory_level_2: boolean
+  has_scope_orders: boolean
+  has_scope_customers: boolean
+  has_scope_reports: boolean
+  has_scope_analytics: boolean
+  has_scope_catalog: boolean
+  has_scope_caja: boolean
+  has_scope_pos_override: boolean
+}
+
 interface User {
   id: number
   username: string
+  email: string
+  first_name: string
+  last_name: string
+  is_active: boolean
+  is_staff: boolean
+  is_superuser: boolean
+  date_joined: string
+  last_login: string | null
+  scopes: UserScopes
   roles: string[]
 }
 
@@ -35,7 +59,7 @@ export const useAuthStore = defineStore('auth', () => {
   const login = async (username: string, password: string) => {
     isLoading.value = true
     try {
-      const authBaseURL = import.meta.env.VITE_AUTH_BASE_URL || 'http://localhost:8000/api'
+      const authBaseURL = import.meta.env.VITE_AUTH_BASE_URL || 'http://localhost/api'
       const response = await axios.post(`${authBaseURL}/auth/login/`, {
         username,
         password
@@ -64,7 +88,7 @@ export const useAuthStore = defineStore('auth', () => {
   // Cargar perfil del usuario con /auth/me
   const loadProfile = async () => {
     try {
-      const authBaseURL = import.meta.env.VITE_AUTH_BASE_URL || 'http://localhost:8000/api'
+      const authBaseURL = import.meta.env.VITE_AUTH_BASE_URL || 'http://localhost/api'
       const token = localStorage.getItem('access_token')
       const response = await axios.get(`${authBaseURL}/auth/me/`, {
         headers: {
@@ -106,6 +130,16 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value.roles.includes(requiredRole)
   }
 
+  const hasScope = (requiredScope: string | string[]) => {
+    if (!user.value?.scopes) return false
+    
+    if (Array.isArray(requiredScope)) {
+      return requiredScope.some(scope => user.value!.scopes[scope as keyof UserScopes])
+    }
+    
+    return user.value.scopes[requiredScope as keyof UserScopes]
+  }
+
   return {
     user,
     accessToken,
@@ -118,6 +152,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     loadProfile,
     checkAuth,
-    hasRole
+    hasRole,
+    hasScope
   }
 })

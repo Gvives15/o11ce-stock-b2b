@@ -46,25 +46,6 @@
           >
             {{ loading ? 'Iniciando sesión...' : 'Iniciar Sesión' }}
           </button>
-          
-          <!-- Botones de prueba (solo en desarrollo) -->
-          <div v-if="$env?.DEV" class="mt-6 pt-6 border-t border-gray-200">
-            <p class="text-sm text-gray-600 mb-3">Herramientas de desarrollo:</p>
-            <div class="space-y-2">
-              <button
-                @click="runTests"
-                class="btn-secondary w-full text-sm"
-              >
-                🧪 Probar Autenticación
-              </button>
-              <button
-                @click="testToastSystem"
-                class="btn-secondary w-full text-sm"
-              >
-                🍞 Probar Toasts
-              </button>
-            </div>
-          </div>
         </div>
       </form>
     </div>
@@ -76,7 +57,6 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useToast } from '@/lib/toast';
-import { runAllAuthTests, testToasts } from '@/utils/testAuth';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -97,26 +77,12 @@ const handleLogin = async () => {
     await authStore.login(username.value, password.value)
     success('¡Inicio de sesión exitoso!')
     
-    // Redirigir según los roles del usuario
-    const userRoles = authStore.userRoles
-    if (userRoles.includes('admin')) {
-      router.push('/settings')
-    } else {
-      router.push('/pos')
-    }
+    // Redirigir siempre al dashboard - será el centro de redirección
+    await router.push('/dashboard')
   } catch (err: any) {
     error(err.message || 'Error al iniciar sesión')
   } finally {
     loading.value = false
   }
 }
-
-// Funciones de prueba para desarrollo
-const runTests = async () => {
-  await runAllAuthTests();
-};
-
-const testToastSystem = () => {
-  testToasts();
-};
 </script>

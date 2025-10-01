@@ -76,7 +76,7 @@ class Migration(migrations.Migration):
                 ],
                 "constraints": [
                     models.CheckConstraint(
-                        condition=models.Q(
+                        check=models.Q(
                             ("status_code__gte", 200), ("status_code__lt", 600)
                         ),
                         name="ck_stock_idempotency_valid_status_code",

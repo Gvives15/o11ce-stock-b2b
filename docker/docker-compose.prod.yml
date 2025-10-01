@@ -1,0 +1,53 @@
+services:
+  # Django Backend - Production Configuration
+  web:
+    command: >
+      sh -c "/app/docker/init_data.sh &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    environment:
+      - DEBUG=False
+      - DJANGO_SETTINGS_MODULE=config.settings.production
+
+  # Celery Worker - Production Configuration
+  worker:
+    volumes:
+      - media_volume:/app/media
+
+  # POS Frontend - Production Configuration
+  pos-frontend:
+    command: npm run preview -- --host 0.0.0.0 --port 5173
+    environment:
+      - VITE_API_BASE_URL=https://yourdomain.com/api
+      - NODE_ENV=production
+
+  # Nginx - Production Configuration
+  nginx:
+    volumes:
+      - ../nginx.conf:/etc/nginx/nginx.conf:ro
+      - static_volume:/var/www/static:ro
+      - media_volume:/var/www/media:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro  # SSL certificates
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+
+  # PostgreSQL - Production Configuration
+  db:
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  # Redis - Production Configuration
+  redis:
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  # Remove MailHog in production (commented out)
+  # mailhog:
+  #   # Not needed in production

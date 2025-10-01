@@ -4,6 +4,7 @@ import { resolve } from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/pos/', // Restaurar para coincidir con nginx proxy
   plugins: [vue()],
   resolve: {
     alias: {
@@ -15,10 +16,14 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     cors: true,
+    hmr: {
+      host: 'localhost',
+      port: 5173
+    },
     proxy: {
       // Proxy para desarrollo si es necesario
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://web:8000',
         changeOrigin: true,
         secure: false,
       },

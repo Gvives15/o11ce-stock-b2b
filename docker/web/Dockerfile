@@ -18,4 +18,7 @@ RUN pip install --upgrade pip && \
 
 COPY . /app
 
+# Hacer ejecutable el script de inicialización
+RUN chmod +x /app/docker/init_data.sh
+
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
