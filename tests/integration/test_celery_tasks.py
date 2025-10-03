@@ -16,13 +16,14 @@ from apps.notifications.tasks import (
     send_near_expiry_alert,
     cleanup_expired_lots
 )
-from apps.inventory.tasks import (
+from apps.stock.tasks import (
     update_stock_metrics,
-    scan_near_expiry_products,
-    scan_low_stock_products
+    scan_near_expiry,
+    scan_low_stock
 )
-from apps.inventory.models import Product, StockLot, Warehouse
-from tests.factories import ProductFactory, StockLotFactory, WarehouseFactory
+from apps.catalog.models import Product
+from apps.stock.models import StockLot, Warehouse
+from tests.utilities.factories import ProductFactory, StockLotFactory, WarehouseFactory
 from tests.fixtures import *
 
 
@@ -165,7 +166,7 @@ class CeleryTaskSmokeTests(TestCase):
         
         # Verify result contains metrics
         self.assertIsInstance(result.result, dict)
-        self.assertIn('total_products', result.result)
+        self.assertIn('metrics_updated', result.result)
     
     def test_scan_near_expiry_products_task_executes(self):
         """Test that scan_near_expiry_products task executes."""
@@ -181,14 +182,14 @@ class CeleryTaskSmokeTests(TestCase):
         )
         
         # Call the task
-        result = scan_near_expiry_products.delay()
+        result = scan_near_expiry.delay(days_ahead=3)
         
         # Verify task completed
         self.assertTrue(result.successful())
         
         # Verify result
         self.assertIsInstance(result.result, dict)
-        self.assertIn('scanned_products', result.result)
+        self.assertIn('products_found', result.result)
     
     def test_scan_low_stock_products_task_executes(self):
         """Test that scan_low_stock_products task executes."""
@@ -201,14 +202,14 @@ class CeleryTaskSmokeTests(TestCase):
         )
         
         # Call the task
-        result = scan_low_stock_products.delay()
+        result = scan_low_stock.delay(min_stock_threshold=10.0)
         
         # Verify task completed
         self.assertTrue(result.successful())
         
         # Verify result
         self.assertIsInstance(result.result, dict)
-        self.assertIn('scanned_products', result.result)
+        self.assertIn('products_found', result.result)
 
 
 @override_settings(
@@ -289,7 +290,7 @@ class CeleryTaskRetryTests(TestCase):
         self.assertTrue(result.successful())
         
         # Should return zero metrics
-        self.assertEqual(result.result['total_products'], 0)
+        self.assertEqual(result.result['metrics_updated']['total_products'], 0)
 
 
 @override_settings(
@@ -311,8 +312,8 @@ class CeleryTaskIntegrationTests(TestCase):
         # Create a chain of tasks
         job = chain(
             update_stock_metrics.s(),
-            scan_low_stock_products.s(),
-            scan_near_expiry_products.s()
+            scan_low_stock.s(10.0),
+            scan_near_expiry.s(7)
         )
         
         # Execute the chain
@@ -328,8 +329,8 @@ class CeleryTaskIntegrationTests(TestCase):
         # Create a group of tasks
         job = group(
             update_stock_metrics.s(),
-            scan_low_stock_products.s(),
-            scan_near_expiry_products.s()
+            scan_low_stock.s(10.0),
+            scan_near_expiry.s(7)
         )
         
         # Execute the group
@@ -356,7 +357,7 @@ class CeleryTaskIntegrationTests(TestCase):
         
         # Verify task can read the committed data
         self.assertTrue(result.successful())
-        self.assertGreater(result.result['total_stock'], 0)
+        self.assertGreater(result.result['metrics_updated']['total_lots'], 0)
     
     def test_task_error_handling_with_database(self):
         """Test that task errors don't corrupt database state."""
@@ -400,9 +401,9 @@ class CeleryConfigurationTests(TestCase):
             'apps.notifications.tasks.send_low_stock_alert',
             'apps.notifications.tasks.send_near_expiry_alert',
             'apps.notifications.tasks.cleanup_expired_lots',
-            'apps.inventory.tasks.update_stock_metrics',
-            'apps.inventory.tasks.scan_near_expiry_products',
-            'apps.inventory.tasks.scan_low_stock_products',
+            'apps.stock.tasks.update_stock_metrics',
+            'apps.stock.tasks.scan_near_expiry',
+            'apps.stock.tasks.scan_low_stock',
         ]
         
         for task_name in expected_tasks:

@@ -5,7 +5,7 @@ import django
 from django.conf import settings
 
 # Configure Django settings for pytest
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.test')
 
 # Setup Django
 django.setup()

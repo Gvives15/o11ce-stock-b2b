@@ -1,5 +1,6 @@
 """
 Celery tasks for stock management with fault tolerance.
+Event-driven version - publishes events instead of direct notifications.
 """
 import logging
 from datetime import date, timedelta
@@ -10,8 +11,12 @@ from django.db import transaction, models
 from django.utils import timezone
 from apps.catalog.models import Product
 from apps.stock.models import StockLot
-from apps.notifications.tasks import send_email_alert, send_low_stock_alert
 from apps.core.metrics import increment_counter, set_gauge
+from apps.events.manager import EventSystemManager
+from apps.core.events import EventBus
+from apps.stock.events import (
+    LotExpiryWarning, LowStockDetected, StockNotificationRequested
+)
 
 logger = logging.getLogger(__name__)
 
@@ -81,16 +86,37 @@ def scan_near_expiry(self, days_ahead: int = 7):
         alerts_sent = 0
         for product_name, product_data in products_by_expiry.items():
             try:
-                # Prepare alert message
+                # Prepare alert data
                 lots_info = []
                 for lot in product_data['lots']:
                     days_to_expiry = (lot.expiry_date - date.today()).days
-                    lots_info.append(
-                        f"  - Lote {lot.lot_code}: {lot.qty_on_hand} unidades "
-                        f"(vence en {days_to_expiry} días - {lot.expiry_date})"
+                    lots_info.append({
+                        'lot_code': lot.lot_code,
+                        'quantity': float(lot.qty_on_hand),
+                        'days_to_expiry': days_to_expiry,
+                        'expiry_date': lot.expiry_date.isoformat()
+                    })
+                
+                # Publish expiry warning event for each lot
+                for lot in product_data['lots']:
+                    days_to_expiry = (lot.expiry_date - date.today()).days
+                    
+                    # Publish LotExpiryWarning event
+                    EventBus.publish(
+                        LotExpiryWarning(
+                            lot_id=str(lot.id),
+                            product_id=str(lot.product.id),
+                            product_name=lot.product.name,
+                            lot_code=lot.lot_code,
+                            expiry_date=lot.expiry_date,
+                            days_to_expiry=days_to_expiry,
+                            quantity=lot.qty_on_hand,
+                            warehouse_id=str(lot.warehouse.id) if lot.warehouse else None,
+                            priority="high" if days_to_expiry <= 3 else "medium"
+                        )
                     )
                 
-                subject = f"⚠️ Productos próximos a vencer: {product_name}"
+                # Publish notification request event
                 message = f"""
 ALERTA DE VENCIMIENTO PRÓXIMO
 
@@ -99,7 +125,7 @@ Total en riesgo: {product_data['total_qty']} unidades
 Lotes afectados: {len(product_data['lots'])}
 
 Detalle de lotes:
-{chr(10).join(lots_info)}
+{chr(10).join([f"  - Lote {info['lot_code']}: {info['quantity']} unidades (vence en {info['days_to_expiry']} días - {info['expiry_date']})" for info in lots_info])}
 
 Se recomienda:
 1. Priorizar la venta de estos lotes (FEFO)
@@ -109,17 +135,29 @@ Se recomienda:
 Revisar en el panel de stock.
                 """
                 
-                # Send alert asynchronously
-                send_email_alert.delay(
-                    subject=subject,
-                    message=message,
-                    recipient_email='stock@company.com'  # Configure in settings
+                EventBus.publish(
+                    StockNotificationRequested(
+                        notification_id=f"expiry_warning_{product_data['product'].id}_{date.today().isoformat()}",
+                        notification_type="expiry_warning",
+                        priority="high" if any(lot.expiry_date <= date.today() + timedelta(days=3) for lot in product_data['lots']) else "medium",
+                        product_id=str(product_data['product'].id),
+                        product_name=product_name,
+                        message=message,
+                        details={
+                            'total_quantity': float(product_data['total_qty']),
+                            'lots_count': len(product_data['lots']),
+                            'lots_info': lots_info
+                        },
+                        notify_roles=['stock_manager', 'warehouse_manager'],
+                        notify_email=True,
+                        notify_dashboard=True
+                    )
                 )
                 
                 alerts_sent += 1
                 
             except Exception as alert_exc:
-                logger.error(f"Failed to send alert for {product_name}: {alert_exc}")
+                logger.error(f"Failed to publish events for {product_name}: {alert_exc}")
         
         # Update metrics
         set_gauge('products_near_expiry', len(products_by_expiry))
@@ -204,17 +242,43 @@ def scan_low_stock(self, min_stock_threshold: float = 10.0):
         alerts_sent = 0
         for product_data in products_with_stock:
             try:
-                # Send low stock alert asynchronously
-                send_low_stock_alert.delay(
-                    product_name=product_data['product'].name,
-                    current_stock=product_data['current_stock'],
-                    min_stock=product_data['min_stock']
+                # Publish LowStockDetected event
+                EventBus.publish(
+                    LowStockDetected(
+                        product_id=str(product_data['product'].id),
+                        product_name=product_data['product'].name,
+                        current_stock=Decimal(str(product_data['current_stock'])),
+                        min_stock_threshold=Decimal(str(product_data['min_stock'])),
+                        shortage_quantity=Decimal(str(product_data['shortage'])),
+                        warehouse_id=None,  # Global stock level
+                        priority="high" if product_data['current_stock'] == 0 else "medium"
+                    )
+                )
+                
+                # Publish notification request event
+                EventBus.publish(
+                    StockNotificationRequested(
+                        notification_id=f"low_stock_{product_data['product'].id}_{date.today().isoformat()}",
+                        notification_type="low_stock",
+                        priority="urgent" if product_data['current_stock'] == 0 else "high",
+                        product_id=str(product_data['product'].id),
+                        product_name=product_data['product'].name,
+                        message=f"Stock bajo detectado para {product_data['product'].name}: {product_data['current_stock']} unidades (mínimo: {product_data['min_stock']})",
+                        details={
+                            'current_stock': product_data['current_stock'],
+                            'min_stock': product_data['min_stock'],
+                            'shortage': product_data['shortage']
+                        },
+                        notify_roles=['stock_manager', 'purchasing_manager'],
+                        notify_email=True,
+                        notify_dashboard=True
+                    )
                 )
                 
                 alerts_sent += 1
                 
             except Exception as alert_exc:
-                logger.error(f"Failed to send low stock alert for {product_data['product'].name}: {alert_exc}")
+                logger.error(f"Failed to publish events for {product_data['product'].name}: {alert_exc}")
         
         # Update metrics
         set_gauge('products_low_stock', len(products_with_stock))

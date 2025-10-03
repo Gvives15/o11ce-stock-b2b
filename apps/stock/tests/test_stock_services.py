@@ -8,12 +8,21 @@ from django.db import transaction
 from django.contrib.auth.models import User
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
+from unittest.mock import patch, MagicMock
 
 from apps.catalog.models import Product
 from apps.stock.models import Warehouse, StockLot, Movement
 from apps.stock.services import (
+    # Legacy services
     create_entry, create_exit, pick_lots_fefo,
-    StockError, NotEnoughStock, NoLotsAvailable
+    StockError, NotEnoughStock, NoLotsAvailable,
+    # Event-driven services
+    request_stock_entry, request_stock_exit,
+    validate_stock_availability, validate_warehouse
+)
+from apps.stock.events import (
+    StockEntryRequested, StockExitRequested,
+    StockValidationRequested, WarehouseValidationRequested
 )
 
 
@@ -440,3 +449,289 @@ class TestStockEdgeCases:
         lot_1 = StockLot.objects.get(lot_code='LOT-1')
         assert allocation_plan[1]['lot_id'] == lot_1.id
         assert allocation_plan[1]['qty_to_take'] == Decimal('3')  # 6 - 3 = 3
+
+
+# ============================================================================
+# EVENT-DRIVEN SERVICES TESTS
+# ============================================================================
+
+@pytest.mark.django_db
+class TestEventDrivenStockServices:
+    """Tests para los nuevos servicios event-driven de stock."""
+    
+    def setup_method(self):
+        """Setup test data."""
+        self.user = User.objects.create_user(username='eventuser', password='testpass')
+        self.warehouse = Warehouse.objects.create(name='Event Warehouse', is_active=True)
+        self.product = Product.objects.create(
+            code='EVENT-001',
+            name='Event Product',
+            price=Decimal('10.00'),
+            tax_rate=Decimal('21.00'),
+            is_active=True
+        )
+
+    @patch('apps.stock.services.publish_event')
+    def test_request_stock_entry_publishes_event(self, mock_publish):
+        """Test que request_stock_entry publica el evento correcto."""
+        # Arrange
+        entry_data = {
+            "product_id": str(self.product.id),
+            "lot_code": "EVENT-LOT-001",
+            "expiry_date": date.today() + timedelta(days=30),
+            "quantity": Decimal("15.00"),
+            "unit_cost": Decimal("8.50"),
+            "warehouse_id": str(self.warehouse.id),
+            "created_by_id": str(self.user.id),
+            "reason": "purchase"
+        }
+        
+        # Act
+        result = request_stock_entry(**entry_data)
+        
+        # Assert
+        assert result["success"] is True
+        assert "entry_id" in result
+        mock_publish.assert_called_once()
+        
+        # Verificar el evento publicado
+        published_event = mock_publish.call_args[0][0]
+        assert isinstance(published_event, StockEntryRequested)
+        assert published_event.product_id == str(self.product.id)
+        assert published_event.lot_code == "EVENT-LOT-001"
+        assert published_event.quantity == Decimal("15.00")
+
+    @patch('apps.stock.services.publish_event')
+    def test_request_stock_exit_publishes_event(self, mock_publish):
+        """Test que request_stock_exit publica el evento correcto."""
+        # Arrange
+        exit_data = {
+            "product_id": str(self.product.id),
+            "quantity": Decimal("5.00"),
+            "warehouse_id": str(self.warehouse.id),
+            "created_by_id": str(self.user.id),
+            "reason": "sale"
+        }
+        
+        # Act
+        result = request_stock_exit(**exit_data)
+        
+        # Assert
+        assert result["success"] is True
+        assert "exit_id" in result
+        mock_publish.assert_called_once()
+        
+        # Verificar el evento publicado
+        published_event = mock_publish.call_args[0][0]
+        assert isinstance(published_event, StockExitRequested)
+        assert published_event.product_id == str(self.product.id)
+        assert published_event.quantity == Decimal("5.00")
+
+    @patch('apps.stock.services.publish_event')
+    def test_validate_stock_availability_publishes_event(self, mock_publish):
+        """Test que validate_stock_availability publica el evento correcto."""
+        # Act
+        result = validate_stock_availability(
+            product_id=str(self.product.id),
+            quantity=Decimal("10.00"),
+            warehouse_id=str(self.warehouse.id)
+        )
+        
+        # Assert
+        assert result["success"] is True
+        assert "validation_id" in result
+        mock_publish.assert_called_once()
+        
+        # Verificar el evento publicado
+        published_event = mock_publish.call_args[0][0]
+        assert isinstance(published_event, StockValidationRequested)
+        assert published_event.product_id == str(self.product.id)
+        assert published_event.quantity == Decimal("10.00")
+
+    @patch('apps.stock.services.publish_event')
+    def test_validate_warehouse_publishes_event(self, mock_publish):
+        """Test que validate_warehouse publica el evento correcto."""
+        # Act
+        result = validate_warehouse(warehouse_id=str(self.warehouse.id))
+        
+        # Assert
+        assert result["success"] is True
+        assert "validation_id" in result
+        mock_publish.assert_called_once()
+        
+        # Verificar el evento publicado
+        published_event = mock_publish.call_args[0][0]
+        assert isinstance(published_event, WarehouseValidationRequested)
+        assert published_event.warehouse_id == str(self.warehouse.id)
+
+    @patch('apps.stock.services.publish_event')
+    def test_request_stock_entry_with_optional_parameters(self, mock_publish):
+        """Test request_stock_entry con parámetros opcionales."""
+        # Act
+        result = request_stock_entry(
+            product_id=str(self.product.id),
+            lot_code="OPT-LOT-001",
+            expiry_date=date.today() + timedelta(days=60),
+            quantity=Decimal("25.00"),
+            unit_cost=Decimal("12.00"),
+            warehouse_id=str(self.warehouse.id),
+            created_by_id=str(self.user.id),
+            reason="adjustment",
+            notes="Test adjustment"
+        )
+        
+        # Assert
+        assert result["success"] is True
+        mock_publish.assert_called_once()
+        
+        published_event = mock_publish.call_args[0][0]
+        assert published_event.reason == "adjustment"
+        assert published_event.notes == "Test adjustment"
+
+    @patch('apps.stock.services.publish_event')
+    def test_validate_stock_availability_with_order_id(self, mock_publish):
+        """Test validate_stock_availability con order_id."""
+        # Act
+        result = validate_stock_availability(
+            product_id=str(self.product.id),
+            quantity=Decimal("7.00"),
+            warehouse_id=str(self.warehouse.id),
+            order_id="ORDER-12345"
+        )
+        
+        # Assert
+        assert result["success"] is True
+        mock_publish.assert_called_once()
+        
+        published_event = mock_publish.call_args[0][0]
+        assert published_event.order_id == "ORDER-12345"
+
+    def test_request_stock_entry_validation_errors(self):
+        """Test validaciones de entrada en request_stock_entry."""
+        # Test cantidad negativa
+        with pytest.raises(ValueError, match="Quantity must be positive"):
+            request_stock_entry(
+                product_id=str(self.product.id),
+                lot_code="INVALID-LOT",
+                expiry_date=date.today() + timedelta(days=30),
+                quantity=Decimal("-5.00"),  # Negativo
+                unit_cost=Decimal("8.00"),
+                warehouse_id=str(self.warehouse.id),
+                created_by_id=str(self.user.id)
+            )
+        
+        # Test costo unitario negativo
+        with pytest.raises(ValueError, match="Unit cost must be positive"):
+            request_stock_entry(
+                product_id=str(self.product.id),
+                lot_code="INVALID-LOT",
+                expiry_date=date.today() + timedelta(days=30),
+                quantity=Decimal("5.00"),
+                unit_cost=Decimal("-8.00"),  # Negativo
+                warehouse_id=str(self.warehouse.id),
+                created_by_id=str(self.user.id)
+            )
+
+    def test_request_stock_exit_validation_errors(self):
+        """Test validaciones de salida en request_stock_exit."""
+        # Test cantidad negativa
+        with pytest.raises(ValueError, match="Quantity must be positive"):
+            request_stock_exit(
+                product_id=str(self.product.id),
+                quantity=Decimal("-3.00"),  # Negativo
+                warehouse_id=str(self.warehouse.id),
+                created_by_id=str(self.user.id)
+            )
+
+    def test_validate_stock_availability_validation_errors(self):
+        """Test validaciones en validate_stock_availability."""
+        # Test cantidad negativa
+        with pytest.raises(ValueError, match="Quantity must be positive"):
+            validate_stock_availability(
+                product_id=str(self.product.id),
+                quantity=Decimal("-1.00"),  # Negativo
+                warehouse_id=str(self.warehouse.id)
+            )
+
+
+@pytest.mark.django_db
+class TestEventDrivenCompatibility:
+    """Tests para verificar compatibilidad entre servicios legacy y event-driven."""
+    
+    def setup_method(self):
+        """Setup test data."""
+        self.user = User.objects.create_user(username='compatuser', password='testpass')
+        self.warehouse = Warehouse.objects.create(name='Compat Warehouse', is_active=True)
+        self.product = Product.objects.create(
+            code='COMPAT-001',
+            name='Compatibility Product',
+            price=Decimal('15.00'),
+            tax_rate=Decimal('21.00'),
+            is_active=True
+        )
+
+    @patch('apps.stock.services.publish_event')
+    def test_legacy_and_event_driven_coexistence(self, mock_publish):
+        """Test que los servicios legacy y event-driven pueden coexistir."""
+        # Usar servicio legacy para crear entrada
+        legacy_movement = create_entry(
+            product=self.product,
+            lot_code='LEGACY-LOT',
+            expiry_date=date.today() + timedelta(days=30),
+            qty=Decimal('20'),
+            unit_cost=Decimal('10.00'),
+            warehouse=self.warehouse,
+            created_by=self.user
+        )
+        
+        # Usar servicio event-driven para solicitar salida
+        event_result = request_stock_exit(
+            product_id=str(self.product.id),
+            quantity=Decimal("5.00"),
+            warehouse_id=str(self.warehouse.id),
+            created_by_id=str(self.user.id),
+            reason="sale"
+        )
+        
+        # Assert - ambos deberían funcionar
+        assert legacy_movement.type == Movement.Type.ENTRY
+        assert legacy_movement.qty == Decimal('20')
+        
+        assert event_result["success"] is True
+        mock_publish.assert_called_once()
+        
+        # Verificar que el stock creado por legacy está disponible
+        stock_lot = StockLot.objects.get(lot_code='LEGACY-LOT')
+        assert stock_lot.qty_on_hand == Decimal('20')
+
+    def test_legacy_services_still_functional(self):
+        """Test que los servicios legacy siguen funcionando correctamente."""
+        # Test create_entry legacy
+        movement = create_entry(
+            product=self.product,
+            lot_code='LEGACY-TEST',
+            expiry_date=date.today() + timedelta(days=45),
+            qty=Decimal('30'),
+            unit_cost=Decimal('12.00'),
+            warehouse=self.warehouse,
+            created_by=self.user
+        )
+        
+        assert movement.type == Movement.Type.ENTRY
+        assert movement.qty == Decimal('30')
+        
+        # Test create_exit legacy
+        exit_movements = create_exit(
+            product=self.product,
+            qty_total=Decimal('10'),
+            warehouse=self.warehouse,
+            created_by=self.user
+        )
+        
+        assert len(exit_movements) == 1
+        assert exit_movements[0].type == Movement.Type.EXIT
+        assert exit_movements[0].qty == Decimal('10')
+        
+        # Verificar stock final
+        stock_lot = StockLot.objects.get(lot_code='LEGACY-TEST')
+        assert stock_lot.qty_on_hand == Decimal('20')  # 30 - 10

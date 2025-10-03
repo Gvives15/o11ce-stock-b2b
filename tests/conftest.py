@@ -16,7 +16,11 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 
 # Configurar Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+# Asegurar que las pruebas no tomen la configuración de Docker/CI en entorno local
+if os.environ.get('TESTING') != 'true':
+    os.environ.pop('DATABASE_URL', None)
+    os.environ.pop('POSTGRES_DB', None)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.test')
 django.setup()
 
 # Importaciones después de configurar Django
@@ -29,10 +33,19 @@ User = get_user_model()
 
 @pytest.fixture(scope='session')
 def django_db_setup():
-    """Configuración de base de datos para toda la sesión de tests."""
+    """Configuración de base de datos para toda la sesión de tests.
+    - En Docker/CI (DATABASE_URL o USE_TEST_DB=postgres), respeta la configuración de Postgres.
+    - En entorno local, usa SQLite basada en archivo para evitar problemas de DB en memoria.
+    """
+    use_postgres = os.environ.get('USE_TEST_DB') == 'postgres' or bool(os.environ.get('DATABASE_URL'))
+    if use_postgres:
+        # Mantener configuración existente (PostgreSQL)
+        return
+    # Usar SQLite basada en archivo para evitar 'no such table' por DB en memoria
+    tmp_db_path = os.path.join(tempfile.gettempdir(), 'pytest_db.sqlite3')
     settings.DATABASES['default'] = {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': ':memory:',
+        'NAME': tmp_db_path,
     }
 
 
@@ -266,17 +279,20 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.fefo)
 
 
+@pytest.fixture(scope='session', autouse=True)
+def apply_migrations(django_db_setup, django_db_blocker):
+    """Aplica migraciones antes de ejecutar los tests para asegurar que las tablas existen.
+    Usa django_db_blocker para permitir acceso a DB dentro de la sesión.
+    """
+    with django_db_blocker.unblock():
+        call_command('migrate', run_syncdb=True, verbosity=0)
+
+
 @pytest.fixture(autouse=True)
 def setup_test_environment():
-    """Configuración automática del entorno de test."""
-    # Configurar timezone
-    os.environ['TZ'] = 'UTC'
-    
-    # Configurar logging para tests
+    """Configuración general del entorno de prueba (logging, tz, etc.)."""
     import logging
+    # Reducir el ruido de logs en pruebas
     logging.disable(logging.CRITICAL)
-    
     yield
-    
-    # Cleanup después del test
     logging.disable(logging.NOTSET)

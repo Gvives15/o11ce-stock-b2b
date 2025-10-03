@@ -1,19 +1,594 @@
 # apps/stock/services.py
 import logging
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Optional, List, Dict, Any, NamedTuple
+from typing import Optional, List, Dict, Any, NamedTuple, Tuple
 
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
+from django.http import Http404
 
 from apps.catalog.models import Product
 from .models import StockLot, Movement, Warehouse
+from apps.events.manager import EventSystemManager
+from apps.core.events import EventBus
+from apps.stock.events import (
+    StockEntryRequested, StockExitRequested, StockValidationRequested,
+    WarehouseValidationRequested
+)
+from .idempotency_service import IdempotencyService
 
 logger = logging.getLogger(__name__)
 
+
+# API Service Layer - Funciones para manejar lógica de endpoints
+
+def handle_stock_validation_request(
+    product_id: int,
+    qty: Decimal,
+    warehouse_id: Optional[int] = None,
+    correlation_id: Optional[str] = None
+) -> Tuple[int, Dict[str, Any]]:
+    """
+    Maneja la lógica de validación de stock para endpoints.
+    
+    Returns:
+        Tuple[int, Dict]: (status_code, response_data)
+    """
+    try:
+        # Validate that product exists
+        product = get_object_or_404(Product, id=product_id)
+        
+        if warehouse_id:
+            warehouse = get_object_or_404(Warehouse, id=warehouse_id)
+        
+        # Generate correlation ID if not provided
+        if not correlation_id:
+            correlation_id = str(uuid.uuid4())
+        
+        # Request stock validation via events
+        event_id = validate_stock_availability(
+            product_id=product_id,
+            qty=qty,
+            warehouse_id=warehouse_id,
+            correlation_id=correlation_id
+        )
+        
+        response_data = {
+            "event_id": event_id,
+            "status": "validation_requested",
+            "message": "Stock validation request submitted successfully",
+            "correlation_id": correlation_id
+        }
+        
+        return 200, response_data
+        
+    except Http404 as e:
+        error_data = {"error": "NOT_FOUND", "message": str(e)}
+        return 404, error_data
+    except Exception as e:
+        error_data = {"error": "VALIDATION_ERROR", "message": str(e)}
+        return 400, error_data
+
+
+def handle_stock_entry_request(
+    request_user,
+    payload_data: Dict[str, Any],
+    idempotency_key: str,
+    operation_type: str = "entry_v2"
+) -> Tuple[int, Dict[str, Any]]:
+    """
+    Maneja la lógica de entrada de stock para endpoints.
+    
+    Args:
+        request_user: Usuario de la request
+        payload_data: Datos del payload
+        idempotency_key: Clave de idempotencia
+        operation_type: Tipo de operación para idempotencia
+        
+    Returns:
+        Tuple[int, Dict]: (status_code, response_data)
+    """
+    try:
+        # Prepare request data for idempotency check
+        request_data = {
+            "product_id": payload_data["product_id"],
+            "lot_code": payload_data["lot_code"],
+            "expiry_date": payload_data["expiry_date"].isoformat() if hasattr(payload_data["expiry_date"], 'isoformat') else str(payload_data["expiry_date"]),
+            "qty": str(payload_data["qty"]),
+            "unit_cost": str(payload_data["unit_cost"]),
+            "warehouse_id": payload_data["warehouse_id"],
+            "reason": payload_data.get("reason", Movement.Reason.PURCHASE),
+        }
+        
+        # Check if this request was already processed
+        existing_response = IdempotencyService.check_existing_request(
+            idempotency_key, operation_type, request_data
+        )
+        if existing_response:
+            return existing_response
+        
+        # Validate that product and warehouse exist
+        product = get_object_or_404(Product, id=payload_data["product_id"])
+        warehouse = get_object_or_404(Warehouse, id=payload_data["warehouse_id"])
+        
+        # Request stock entry via events
+        event_id = request_stock_entry(
+            product_id=payload_data["product_id"],
+            lot_code=payload_data["lot_code"],
+            expiry_date=payload_data["expiry_date"],
+            qty=payload_data["qty"],
+            unit_cost=payload_data["unit_cost"],
+            user_id=getattr(request_user, 'id', None) if hasattr(request_user, 'id') else None,
+            warehouse_id=payload_data["warehouse_id"],
+            correlation_id=idempotency_key
+        )
+        
+        response_data = {
+            "event_id": event_id,
+            "status": "requested",
+            "message": "Stock entry request submitted successfully",
+            "correlation_id": idempotency_key
+        }
+        
+        # Store response for idempotency
+        IdempotencyService.store_response(
+            idempotency_key, operation_type, request_data, 202, response_data,
+            created_by=request_user if hasattr(request_user, 'id') else None
+        )
+        
+        return 202, response_data
+        
+    except ValueError as e:
+        error_data = {"error": "IDEMPOTENCY_ERROR", "message": str(e)}
+        return 400, error_data
+    except Http404 as e:
+        error_data = {"error": "NOT_FOUND", "message": str(e)}
+        return 404, error_data
+    except Exception as e:
+        error_data = {"error": "VALIDATION_ERROR", "message": str(e)}
+        return 400, error_data
+
+
+def handle_stock_exit_request(
+    request_user,
+    payload_data: Dict[str, Any],
+    idempotency_key: str,
+    operation_type: str = "exit_v2"
+) -> Tuple[int, Dict[str, Any]]:
+    """
+    Maneja la lógica de salida de stock para endpoints.
+    
+    Args:
+        request_user: Usuario de la request
+        payload_data: Datos del payload
+        idempotency_key: Clave de idempotencia
+        operation_type: Tipo de operación para idempotencia
+        
+    Returns:
+        Tuple[int, Dict]: (status_code, response_data)
+    """
+    try:
+        # Prepare request data for idempotency check
+        request_data = {
+            "product_id": payload_data["product_id"],
+            "qty_total": str(payload_data["qty_total"]),
+            "warehouse_id": payload_data["warehouse_id"],
+            "reason": payload_data.get("reason", Movement.Reason.SALE),
+        }
+        
+        # Check if this request was already processed
+        existing_response = IdempotencyService.check_existing_request(
+            idempotency_key, operation_type, request_data
+        )
+        if existing_response:
+            return existing_response
+        
+        # Validate that product and warehouse exist
+        product = get_object_or_404(Product, id=payload_data["product_id"])
+        warehouse = get_object_or_404(Warehouse, id=payload_data["warehouse_id"])
+        
+        # Request stock exit via events
+        event_id = request_stock_exit(
+            product_id=payload_data["product_id"],
+            qty=payload_data["qty_total"],
+            user_id=getattr(request_user, 'id', None) if hasattr(request_user, 'id') else None,
+            warehouse_id=payload_data["warehouse_id"],
+            correlation_id=idempotency_key
+        )
+        
+        response_data = {
+            "event_id": event_id,
+            "status": "requested",
+            "message": "Stock exit request submitted successfully",
+            "correlation_id": idempotency_key
+        }
+        
+        # Store response for idempotency
+        IdempotencyService.store_response(
+            idempotency_key, operation_type, request_data, 202, response_data,
+            created_by=request_user if hasattr(request_user, 'id') else None
+        )
+        
+        return 202, response_data
+        
+    except ValueError as e:
+        error_data = {"error": "IDEMPOTENCY_ERROR", "message": str(e)}
+        return 400, error_data
+    except Http404 as e:
+        error_data = {"error": "NOT_FOUND", "message": str(e)}
+        return 404, error_data
+    except Exception as e:
+        error_data = {"error": "VALIDATION_ERROR", "message": str(e)}
+        return 400, error_data
+
+
+def handle_legacy_stock_entry(
+    request_user,
+    payload_data: Dict[str, Any],
+    idempotency_key: str
+) -> Tuple[int, Dict[str, Any]]:
+    """
+    Maneja la lógica de entrada de stock legacy para endpoints.
+    
+    Returns:
+        Tuple[int, Dict]: (status_code, response_data)
+    """
+    try:
+        # Prepare request data for idempotency check
+        request_data = {
+            "product_id": payload_data["product_id"],
+            "lot_code": payload_data["lot_code"],
+            "expiry_date": payload_data["expiry_date"].isoformat() if hasattr(payload_data["expiry_date"], 'isoformat') else str(payload_data["expiry_date"]),
+            "qty": str(payload_data["qty"]),
+            "unit_cost": str(payload_data["unit_cost"]),
+            "warehouse_id": payload_data["warehouse_id"],
+            "reason": payload_data.get("reason", Movement.Reason.PURCHASE),
+        }
+        
+        # Check if this request was already processed
+        existing_response = IdempotencyService.check_existing_request(
+            idempotency_key, "entry", request_data
+        )
+        if existing_response:
+            return existing_response
+        
+        # Obtener objetos
+        product = get_object_or_404(Product, id=payload_data["product_id"])
+        warehouse = get_object_or_404(Warehouse, id=payload_data["warehouse_id"])
+        
+        # Crear entrada usando el servicio transaccional
+        movement = create_entry(
+            product=product,
+            lot_code=payload_data["lot_code"],
+            expiry_date=payload_data["expiry_date"],
+            qty=payload_data["qty"],
+            unit_cost=payload_data["unit_cost"],
+            warehouse=warehouse,
+            reason=payload_data.get("reason", Movement.Reason.PURCHASE),
+            created_by=request_user if hasattr(request_user, 'id') else None
+        )
+        
+        response_data = {
+            "movement_id": movement.id,
+            "lot_id": movement.lot.id,
+            "product_id": movement.product.id,
+            "lot_code": movement.lot.lot_code,
+            "new_qty_on_hand": float(movement.lot.qty_on_hand),
+            "warehouse_name": warehouse.name
+        }
+        
+        # Store response for idempotency
+        IdempotencyService.store_response(
+            idempotency_key, "entry", request_data, 201, response_data,
+            created_by=request_user if hasattr(request_user, 'id') else None
+        )
+        
+        return 201, response_data
+        
+    except ValueError as e:
+        # Idempotency validation error
+        error_data = {"error": "IDEMPOTENCY_ERROR", "message": str(e)}
+        return 400, error_data
+    except StockError as e:
+        error_data = {"error": e.code, "message": str(e)}
+        # Store error response for idempotency
+        try:
+            IdempotencyService.store_response(
+                idempotency_key, "entry", request_data, 400, error_data,
+                created_by=request_user if hasattr(request_user, 'id') else None
+            )
+        except:
+            pass  # Don't fail the request if idempotency storage fails
+        return 400, error_data
+    except Http404 as e:
+        error_data = {"error": "NOT_FOUND", "message": str(e)}
+        # Store 404 error response for idempotency
+        try:
+            IdempotencyService.store_response(
+                idempotency_key, "entry", request_data, 404, error_data,
+                created_by=request_user if hasattr(request_user, 'id') else None
+            )
+        except:
+            pass  # Don't fail the request if idempotency storage fails
+        return 404, error_data
+    except Exception as e:
+        error_data = {"error": "VALIDATION_ERROR", "message": str(e)}
+        return 400, error_data
+
+
+def handle_legacy_stock_exit(
+    request_user,
+    payload_data: Dict[str, Any],
+    idempotency_key: str
+) -> Tuple[int, Dict[str, Any]]:
+    """
+    Maneja la lógica de salida de stock legacy para endpoints.
+    
+    Returns:
+        Tuple[int, Dict]: (status_code, response_data)
+    """
+    try:
+        # Prepare request data for idempotency check
+        request_data = {
+            "product_id": payload_data["product_id"],
+            "qty_total": str(payload_data["qty_total"]),
+            "warehouse_id": payload_data["warehouse_id"],
+            "reason": payload_data.get("reason", Movement.Reason.SALE),
+        }
+        
+        # Check if this request was already processed
+        existing_response = IdempotencyService.check_existing_request(
+            idempotency_key, "exit", request_data
+        )
+        if existing_response:
+            return existing_response
+        
+        # Obtener objetos
+        product = get_object_or_404(Product, id=payload_data["product_id"])
+        warehouse = get_object_or_404(Warehouse, id=payload_data["warehouse_id"])
+        
+        # Crear salida usando el servicio transaccional FEFO
+        movements = create_exit(
+            product=product,
+            qty_total=payload_data["qty_total"],
+            warehouse=warehouse,
+            reason=payload_data.get("reason", Movement.Reason.SALE),
+            created_by=request_user if hasattr(request_user, 'id') else None
+        )
+        
+        # Preparar respuesta con detalles de cada movimiento
+        movement_details = [
+            {
+                "movement_id": mv.id,
+                "lot_id": mv.lot.id,
+                "lot_code": mv.lot.lot_code,
+                "qty_taken": float(mv.qty),
+                "unit_cost": float(mv.unit_cost),
+                "expiry_date": mv.lot.expiry_date.isoformat()
+            }
+            for mv in movements
+        ]
+        
+        response_data = {
+            "total_qty": str(payload_data["qty_total"]),  # Keep as string to match Django Ninja response
+            "movements": movement_details,
+            "warehouse_name": warehouse.name
+        }
+        
+        # Store response for idempotency
+        IdempotencyService.store_response(
+            idempotency_key, "exit", request_data, 201, response_data,
+            created_by=request_user if hasattr(request_user, 'id') else None
+        )
+        
+        return 201, response_data
+        
+    except ValueError as e:
+        # Idempotency validation error
+        error_data = {"error": "IDEMPOTENCY_ERROR", "message": str(e)}
+        return 400, error_data
+    except (NotEnoughStock, NoLotsAvailable) as e:
+        error_data = {"error": e.code, "message": str(e)}
+        # Store error response for idempotency
+        try:
+            IdempotencyService.store_response(
+                idempotency_key, "exit", request_data, 400, error_data,
+                created_by=request_user if hasattr(request_user, 'id') else None
+            )
+        except:
+            pass  # Don't fail the request if idempotency storage fails
+        return 400, error_data
+    except StockError as e:
+        error_data = {"error": e.code, "message": str(e)}
+        # Store error response for idempotency
+        try:
+            IdempotencyService.store_response(
+                idempotency_key, "exit", request_data, 400, error_data,
+                created_by=request_user if hasattr(request_user, 'id') else None
+            )
+        except:
+            pass  # Don't fail the request if idempotency storage fails
+        return 400, error_data
+    except Http404:
+        raise
+    except Exception as e:
+        error_data = {"error": "VALIDATION_ERROR", "message": str(e)}
+        return 400, error_data
+
+
+def handle_stock_lots_query(
+    product_id: Optional[int] = None,
+    warehouse_id: Optional[int] = None,
+    only_available: bool = False,
+    limit: int = 50
+) -> Tuple[int, Dict[str, Any]]:
+    """
+    Maneja la lógica de consulta de lotes de stock para endpoints.
+    
+    Returns:
+        Tuple[int, Dict]: (status_code, response_data)
+    """
+    try:
+        # Construir queryset base
+        queryset = StockLot.objects.select_related('product', 'warehouse')
+        
+        # Aplicar filtros
+        if product_id:
+            product = get_object_or_404(Product, id=product_id)
+            queryset = queryset.filter(product=product)
+            
+        if warehouse_id:
+            warehouse = get_object_or_404(Warehouse, id=warehouse_id)
+            queryset = queryset.filter(warehouse=warehouse)
+            
+        if only_available:
+            queryset = queryset.filter(
+                qty_on_hand__gt=0,
+                is_quarantined=False,
+                is_reserved=False
+            )
+        
+        # Ordenamiento FEFO y límite
+        lots = queryset.order_by('expiry_date', 'id')[:limit]
+        
+        # Preparar respuesta
+        lot_data = [
+            {
+                "id": lot.id,
+                "lot_code": lot.lot_code,
+                "expiry_date": lot.expiry_date,
+                "qty_on_hand": lot.qty_on_hand,
+                "qty_available": lot.qty_available,
+                "unit_cost": lot.unit_cost,
+                "warehouse_name": lot.warehouse.name,
+                "is_quarantined": lot.is_quarantined,
+                "is_reserved": lot.is_reserved,
+                "created_at": lot.created_at.date()
+            }
+            for lot in lots
+        ]
+        
+        response_data = {
+            "lots": lot_data,
+            "total_count": len(lot_data)
+        }
+        
+        return 200, response_data
+        
+    except Http404:
+        raise
+    except Exception as e:
+        error_data = {"error": "VALIDATION_ERROR", "message": str(e)}
+        return 400, error_data
+
+
+# Event-driven service functions (new approach)
+
+def request_stock_entry(
+    product_id: int,
+    lot_code: str,
+    expiry_date: date,
+    qty: Decimal,
+    unit_cost: Decimal,
+    user_id: int,
+    warehouse_id: Optional[int] = None,
+    correlation_id: Optional[str] = None
+) -> str:
+    """
+    Solicita una entrada de stock usando eventos.
+    
+    Returns:
+        str: ID del evento publicado
+    """
+    event = StockEntryRequested(
+        product_id=product_id,
+        lot_code=lot_code,
+        expiry_date=expiry_date,
+        qty=qty,
+        unit_cost=unit_cost,
+        user_id=user_id,
+        warehouse_id=warehouse_id,
+        correlation_id=correlation_id
+    )
+    
+    event_manager = EventSystemManager()
+    return EventBus.publish(event)
+
+
+def request_stock_exit(
+    product_id: int,
+    qty: Decimal,
+    user_id: int,
+    order_id: Optional[int] = None,
+    warehouse_id: Optional[int] = None,
+    correlation_id: Optional[str] = None
+) -> str:
+    """
+    Solicita una salida de stock usando eventos.
+    
+    Returns:
+        str: ID del evento publicado
+    """
+    event = StockExitRequested(
+        product_id=product_id,
+        qty=qty,
+        user_id=user_id,
+        order_id=order_id,
+        warehouse_id=warehouse_id,
+        correlation_id=correlation_id
+    )
+    
+    event_manager = EventSystemManager()
+    return EventBus.publish(event)
+
+
+def validate_stock_availability(
+    product_id: int,
+    qty: Decimal,
+    warehouse_id: Optional[int] = None,
+    correlation_id: Optional[str] = None
+) -> str:
+    """
+    Valida disponibilidad de stock usando eventos.
+    
+    Returns:
+        str: ID del evento publicado
+    """
+    event = StockValidationRequested(
+        product_id=product_id,
+        qty=qty,
+        warehouse_id=warehouse_id,
+        correlation_id=correlation_id
+    )
+    
+    event_manager = EventSystemManager()
+    return EventBus.publish(event)
+
+
+def validate_warehouse(
+    warehouse_id: int,
+    correlation_id: Optional[str] = None
+) -> str:
+    """
+    Valida un depósito usando eventos.
+    
+    Returns:
+        str: ID del evento publicado
+    """
+    event = WarehouseValidationRequested(
+        warehouse_id=warehouse_id,
+        correlation_id=correlation_id
+    )
+    
+    event_manager = EventSystemManager()
+    return EventBus.publish(event)
+
+
+# Tipos auxiliares
 
 class LotOption(NamedTuple):
     """Opción de lote disponible para selección."""
@@ -30,6 +605,9 @@ class AllocationPlan(NamedTuple):
     lot_id: int
     qty_allocated: Decimal
 
+
+# Legacy service functions (maintained for backward compatibility)
+# These will be gradually phased out as consumers migrate to event-driven approach
 
 class StockError(Exception):
     """Errores de negocio para operaciones de stock."""
@@ -473,6 +1051,10 @@ def record_entry(
     user_id: int,
     warehouse_id: Optional[int] = None,
 ) -> Movement:
+    """
+    LEGACY: Registra entrada de stock directamente.
+    DEPRECATED: Usar request_stock_entry() para nuevas implementaciones.
+    """
     if qty <= 0:
         raise EntryError("VALIDATION_ERROR", "qty debe ser > 0")
 
@@ -533,6 +1115,10 @@ def record_exit_fefo(
     order_id: Optional[int] = None,
     warehouse_id: Optional[int] = None,
 ) -> List[Movement]:
+    """
+    LEGACY: Registra salida de stock usando FEFO directamente.
+    DEPRECATED: Usar request_stock_exit() para nuevas implementaciones.
+    """
     if qty <= 0:
         raise ExitError("VALIDATION_ERROR", "qty debe ser > 0")
 

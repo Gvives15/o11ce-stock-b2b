@@ -106,7 +106,7 @@ api.add_router("/panel/v1", panel_router)
 api.add_router("/notifications", notifications_router)
 
 # 8. B2B BFF - Backend for Frontend B2B
-from apps.b2b.api import router as b2b_router
-api.add_router("/b2b/v1", b2b_router)
+# from apps.b2b.api import router as b2b_router
+# api.add_router("/b2b/v1", b2b_router)
 
 __all__ = ["api"]

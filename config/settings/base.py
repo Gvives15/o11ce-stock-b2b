@@ -15,8 +15,9 @@ import os
 import dj_database_url
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file only outside of tests
+if not os.environ.get('DJANGO_SETTINGS_MODULE', '').endswith('.test'):
+    load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -486,6 +487,22 @@ CELERY_TASK_TIME_LIMIT = 600  # 10 minutes
 CELERY_WORKER_HIJACK_ROOT_LOGGER = False
 CELERY_WORKER_LOG_FORMAT = '[%(asctime)s: %(levelname)s/%(processName)s] %(message)s'
 CELERY_WORKER_TASK_LOG_FORMAT = '[%(asctime)s: %(levelname)s/%(processName)s][%(task_name)s(%(task_id)s)] %(message)s'
+
+# EVENT BUS CONFIGURATION
+# ------------------------------------------------------------------------------
+EVENT_BUS_CONFIG = {
+    'enabled': os.environ.get('EVENT_BUS_ENABLED', '1') == '1',
+    'backend': os.environ.get('EVENT_BUS_BACKEND', 'memory'),  # 'memory' or 'redis'
+    'max_queue_size': int(os.environ.get('EVENT_BUS_MAX_QUEUE_SIZE', '10000')),
+    'batch_size': int(os.environ.get('EVENT_BUS_BATCH_SIZE', '100')),
+    'processing_interval': float(os.environ.get('EVENT_BUS_PROCESSING_INTERVAL', '0.1')),
+    'circuit_breaker': {
+        'failure_threshold': int(os.environ.get('EVENT_BUS_FAILURE_THRESHOLD', '5')),
+        'recovery_timeout': int(os.environ.get('EVENT_BUS_RECOVERY_TIMEOUT', '60')),
+        'expected_exception': Exception,
+    },
+    'metrics_enabled': os.environ.get('EVENT_BUS_METRICS_ENABLED', '1') == '1',
+}
 
 # SENTRY CONFIGURATION
 # ------------------------------------------------------------------------------

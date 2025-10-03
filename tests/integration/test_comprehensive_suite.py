@@ -16,12 +16,15 @@ import time
 from datetime import date, timedelta
 from decimal import Decimal
 
-from apps.inventory.models import Product, StockLot, Warehouse, Order, OrderItem
-from apps.inventory.services import FEFOService, StockService
+from apps.catalog.models import Product
+from apps.stock.models import StockLot, Warehouse
+from apps.orders.models import Order, OrderItem
+from apps.stock.fefo_service import FEFOService
+from apps.stock.services import StockService
 from apps.core.cache import CacheService
 from apps.core.health import HealthCheckService
 from apps.core.metrics import MetricsService
-from tests.factories import *
+from tests.utilities.factories import *
 from tests.fixtures import *
 
 

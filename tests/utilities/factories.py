@@ -8,8 +8,8 @@ from decimal import Decimal
 from datetime import date, timedelta
 from django.contrib.auth.models import User
 
-from apps.catalog.models import Product, Category, Benefit
-from apps.stock.models import StockLot, Warehouse, StockMovement
+from apps.catalog.models import Product, Benefit
+from apps.stock.models import StockLot, Warehouse, Movement
 from apps.orders.models import Order, OrderItem
 from apps.customers.models import Customer
 
@@ -28,40 +28,21 @@ class UserFactory(factory.django.DjangoModelFactory):
     is_staff = False
 
 
-class CategoryFactory(factory.django.DjangoModelFactory):
-    """Factory for Category model."""
-    
-    class Meta:
-        model = Category
-    
-    name = factory.Faker('word')
-    description = factory.Faker('text', max_nb_chars=200)
-    is_active = True
-
-
 class ProductFactory(factory.django.DjangoModelFactory):
     """Factory for Product model with realistic data."""
     
     class Meta:
         model = Product
     
+    code = factory.Sequence(lambda n: f"SKU{n:06d}")
     name = factory.Faker('catch_phrase')
-    description = factory.Faker('text', max_nb_chars=500)
-    sku = factory.Sequence(lambda n: f"SKU{n:06d}")
-    barcode = factory.Sequence(lambda n: f"78901234{n:05d}")
+    brand = factory.Faker('company')
+    category = factory.Faker('word')
     price = fuzzy.FuzzyDecimal(1.00, 999.99, 2)
-    cost = factory.LazyAttribute(lambda obj: obj.price * Decimal('0.6'))  # 60% of price
-    category = factory.SubFactory(CategoryFactory)
+    tax_rate = Decimal('21.00')  # Default tax rate
     is_active = True
-    requires_lot = True
-    min_stock_level = fuzzy.FuzzyInteger(5, 50)
-    max_stock_level = fuzzy.FuzzyInteger(100, 500)
-    
-    # Nutritional info for food products
-    calories_per_100g = fuzzy.FuzzyInteger(50, 600)
-    protein_per_100g = fuzzy.FuzzyDecimal(0.5, 30.0, 1)
-    carbs_per_100g = fuzzy.FuzzyDecimal(0.0, 80.0, 1)
-    fat_per_100g = fuzzy.FuzzyDecimal(0.0, 50.0, 1)
+    low_stock_threshold = fuzzy.FuzzyDecimal(5.0, 50.0, 3)
+    pack_size = fuzzy.FuzzyInteger(1, 24)
 
 
 class WarehouseFactory(factory.django.DjangoModelFactory):
@@ -138,34 +119,22 @@ class BenefitFactory(factory.django.DjangoModelFactory):
     benefit_type = fuzzy.FuzzyChoice(['percentage', 'fixed_amount', 'buy_x_get_y'])
     
     # Percentage discount (5% to 50%)
-    percentage_discount = factory.Maybe(
-        'benefit_type',
-        yes_declaration=fuzzy.FuzzyDecimal(5.0, 50.0, 1),
-        no_declaration=None,
-        condition=lambda obj: obj.benefit_type == 'percentage'
+    percentage_discount = factory.LazyAttribute(
+        lambda obj: fuzzy.FuzzyDecimal(5.0, 50.0, 1).fuzz() if obj.benefit_type == 'percentage' else None
     )
     
     # Fixed amount discount ($1 to $50)
-    fixed_discount = factory.Maybe(
-        'benefit_type',
-        yes_declaration=fuzzy.FuzzyDecimal(1.00, 50.00, 2),
-        no_declaration=None,
-        condition=lambda obj: obj.benefit_type == 'fixed_amount'
+    fixed_discount = factory.LazyAttribute(
+        lambda obj: fuzzy.FuzzyDecimal(1.00, 50.00, 2).fuzz() if obj.benefit_type == 'fixed_amount' else None
     )
     
     # Buy X Get Y free
-    buy_quantity = factory.Maybe(
-        'benefit_type',
-        yes_declaration=fuzzy.FuzzyInteger(2, 5),
-        no_declaration=None,
-        condition=lambda obj: obj.benefit_type == 'buy_x_get_y'
+    buy_quantity = factory.LazyAttribute(
+        lambda obj: fuzzy.FuzzyInteger(2, 5).fuzz() if obj.benefit_type == 'buy_x_get_y' else None
     )
     
-    get_quantity = factory.Maybe(
-        'benefit_type',
-        yes_declaration=fuzzy.FuzzyInteger(1, 2),
-        no_declaration=None,
-        condition=lambda obj: obj.benefit_type == 'buy_x_get_y'
+    get_quantity = factory.LazyAttribute(
+        lambda obj: fuzzy.FuzzyInteger(1, 2).fuzz() if obj.benefit_type == 'buy_x_get_y' else None
     )
     
     min_purchase_amount = fuzzy.FuzzyDecimal(0.00, 100.00, 2)
@@ -240,20 +209,19 @@ class OrderItemFactory(factory.django.DjangoModelFactory):
     allocated_lots = factory.LazyFunction(dict)  # JSON field
 
 
-class StockMovementFactory(factory.django.DjangoModelFactory):
-    """Factory for StockMovement model."""
+class MovementFactory(factory.django.DjangoModelFactory):
+    """Factory for Movement model."""
     
     class Meta:
-        model = StockMovement
+        model = Movement
     
-    stock_lot = factory.SubFactory(StockLotFactory)
-    movement_type = fuzzy.FuzzyChoice(['in', 'out', 'adjustment', 'transfer'])
-    quantity = fuzzy.FuzzyInteger(-100, 100)  # Can be negative for outbound
-    reference_type = fuzzy.FuzzyChoice(['purchase', 'sale', 'adjustment', 'transfer'])
-    reference_id = fuzzy.FuzzyInteger(1, 9999)
-    notes = factory.Faker('sentence')
-    
-    created_at = factory.Faker('date_time_between', start_date='-30d', end_date='now')
+    type = fuzzy.FuzzyChoice(['entry', 'exit'])
+    product = factory.SubFactory(ProductFactory)
+    lot = factory.SubFactory(StockLotFactory)
+    qty = fuzzy.FuzzyDecimal(1.0, 100.0, 3)
+    unit_cost = fuzzy.FuzzyDecimal(1.00, 50.00, 2)
+    reason = fuzzy.FuzzyChoice(['purchase', 'sale', 'adjustment', 'transfer'])
+    created_by = factory.SubFactory(UserFactory)
 
 
 # Specialized factories for complex test scenarios

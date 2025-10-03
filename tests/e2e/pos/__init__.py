@@ -1,0 +1,1 @@
+# POS e2e tests package

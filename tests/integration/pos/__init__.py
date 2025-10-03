@@ -1,0 +1,1 @@
+# POS integration tests package
